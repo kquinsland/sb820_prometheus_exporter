@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "sb-exporter"
+version = "0.1.0"
+description = ""
+authors = ["Karl Quinsland <karl@karlquinsland.com>"]
+readme = "readme.md"
+packages = [{ include = "app" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+structlog = "^24.1.0"
+beautifulsoup4 = "^4.12.3"
+prometheus-client = "^0.20.0"
+aiohttp = "^3.9.3"
+
+
+[tool.poetry.group.dev.dependencies]
+isort = "^5.13.2"
+black = "^24.2.0"
+pylint = "^3.1.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

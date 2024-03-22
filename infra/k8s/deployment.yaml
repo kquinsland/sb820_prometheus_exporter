@@ -1,0 +1,122 @@
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: sb-exporter
+  namespace: o11y
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sb-exporter
+  template:
+    metadata:
+      labels:
+        app: sb-exporter
+    spec:
+      containers:
+        - name: sb-exporter
+          image: ghcr.io/kquinsland/sb820_prometheus_exporter:main
+          # For now, there is only one tag: `main`. To prevent stale images, always check
+          #   if the hashes local are the most current.
+          imagePullPolicy: Always
+          # TODO: this can probably drop all privileges and run as a non-root user
+          securityContext: {}
+
+          # As the pod only has ONE http page to offer, can consider the pod to be alive and ready
+          #   once the /metrics page is returning 200/OK.
+          # Note that the /metrics endpoint will return 200/OK as soon as ANY METRICS are available to be scraped.
+          # This includes the "built-in" metrics about python garbage collection ... etc.
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: http
+          ##
+          env:
+            - name: LOG_LEVEL
+              # At info level, ~10 lines of logs per scrape cycle which is 88,000 lines per year
+              # Not bad but WARN+ is a lot less. If any of the meta metrics indicate an issue
+              #   it's trivial to re-deploy with a more verbose log level to see what's going on.
+              value: "WARN"
+            - name: MODEM_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: sb-modem-creds
+                  key: MODEM_USERNAME
+            - name: MODEM_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sb-modem-creds
+                  key: MODEM_PASSWORD
+          ports:
+            # Defaults to 8200, can be changed via env-var
+            - containerPort: 8200
+              name: http
+          # Requests are about 10% above what was observed when using cProfile and allowing
+          # the scraper to run for a few scrape cycles. Limits are still pretty low but should be more
+          #   than enough! Your milage may vary.
+          ##
+          resources:
+            requests:
+              memory: 32Mi
+              cpu: 50m
+            limits:
+              memory: 128Mi
+              cpu: 128m
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: sb-exporter
+  namespace: o11y
+spec:
+  selector:
+    app: sb-exporter
+  type: ClusterIP
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8200
+      targetPort: 8200
+---
+# If using Prometheus Operator, this CRD signals to the operator to scrape the exporter
+# See: https://prometheus-operator.dev/docs/user-guides/scrapeconfig/
+##
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: sb-exporter
+  namespace: o11y
+  labels:
+    # The default value the helm chart configured for the prometheus operator
+    release: "kube-prom"
+    prometheus: system-monitoring-prometheus
+spec:
+  # Default is to scrape once per min. This can be adjusted as needed but the modem
+  #   takes ~10s to respond to the main connection info request. Compared to the
+  #   http request time, the parse/metric-update time is negligible.
+  # With a rock-solid / nominal DOCSIS connection, the metrics should be very stable and
+  #   have minimal variance between samples; you could just scrape every 5m or so in that case.
+  # For diagnostic purposes, though, it's nice to be able to see the metrics change in near-real-time
+  #   so we'll scrape every minute to match the exporter's refresh cycle.
+  # To prevent a situation where we're scraping the metrics AS the exporter is updating them,
+  #   we wait 10s after the exporter's refresh cycle to scrape.
+  #
+  # In testing, it's just under 10 seconds to log in, get the html and then parse/update
+  #   the metrics so 60s + 10s = should reliably scrape metrics that are fresh.
+  scrapeInterval: 70s
+  # Metrics should be available immediately.
+  scrapeTimeout: 3s
+  # In testing, the path doesn't really matter; the built-in http server only has one page...
+  metricsPath: /metrics
+  staticConfigs:
+    - labels:
+        # if the job label is not set, one will be automatically generated from the scrape-config name and namespace
+        #   for consistency, we'll set it here so it doesn't change and risk breaking grafana queries
+        job: sb-exporter
+      targets:
+        - sb-exporter.o11y.svc:8200

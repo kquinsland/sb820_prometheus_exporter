@@ -1,0 +1,3 @@
+# Note: no quotes around the values!
+MODEM_USERNAME=admin
+MODEM_PASSWORD=YourPasswordHere

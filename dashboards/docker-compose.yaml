@@ -1,0 +1,60 @@
+# Local dev environment that spins up a "toy" prometheus / grafana instance.
+# Useful for quickly iterating on dashboard development in tandem with the exporter.
+version: "3.8"
+services:
+  sb_exporter:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: sync
+          path: ../app
+          target: /app
+        - action: rebuild
+          path: ../poetry.lock
+    ports:
+      - 8200:8200
+    environment:
+      # Real time logging
+      - PYTHONUNBUFFERED=1
+      # Either store your credentials here in plain text or
+      # use something like envrc to set/source them before
+      # running docker-compose up
+      - MODEM_USERNAME=${MODEM_USERNAME}
+      - MODEM_PASSWORD=${MODEM_PASSWORD}
+
+    depends_on:
+      - prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - 9090:9090
+    # storage.local.path
+    volumes:
+      - ./cfg/prometheus.yaml:/etc/prometheus/prometheus.yml
+      -  prom-data:/prometheus/
+
+  grafana:
+    image: grafana/grafana-enterprise
+    container_name: grafana
+    environment:
+      # Obviously, yes, this is a bad idea for anything that's not a toy / local tool
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    volumes:
+      # Data sources, should match $GF_PATHS_PROVISIONING if set from default
+      - ./cfg/grafana:/etc/grafana/provisioning/datasources
+      # Config and data
+      - grafana-data:/var/lib/grafana
+
+
+
+volumes:
+  prom-data:
+  grafana-data:

@@ -1,0 +1,7 @@
+# ❯ pylint --generate-rcfile > .pylintrc
+##
+# Defaults are fine, just want to allow longer lines as it's not 2010 anymore and we have
+#   monitors wider than 1024px.
+[FORMAT]
+# Maximum number of characters on a single line.
+max-line-length=180

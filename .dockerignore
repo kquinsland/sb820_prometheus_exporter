@@ -1,0 +1,25 @@
+##
+# For GHA builds, sparse_checkout should mean that the build pod has only the
+#   required files but for builds done locally, we don't need to copy everything into
+#   final image.
+##
+# Don't need docs
+*.md
+re_notes/**.*
+# Or any meta dirs
+.vscode/*
+.github/*
+.git/*
+
+# Or tests
+tests/*
+# Or other dev things
+dashboards/*
+
+# Or any config files
+.gitignore
+.editorconfig
+.pylintrc
+
+# Or any deployment resouces
+infra/*

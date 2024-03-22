@@ -1,0 +1,44 @@
+{
+  "folders": [
+    {
+      "path": ".."
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.autoImportCompletions": true,
+    "cSpell.words": [
+      "aiohttp",
+      "cmconnectionstatus",
+      "cmswinfo",
+      "datasources",
+      "dbmv",
+      "DOCSIS",
+      "graphable",
+      "labelnames",
+      "Pylance",
+      "pysetup",
+      "PYTHONDONTWRITEBYTECODE",
+      "PYTHONUNBUFFERED",
+      "scrapeconfig",
+      "structlog",
+      "systime",
+      "thruple",
+      "TSDB",
+      "Uncorrectables",
+      "VIRTUALENVS"
+    ],
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-python.vscode-pylance",
+      "ms-python.python",
+      "streetsidesoftware.code-spell-checker",
+      "editorconfig.editorconfig",
+      "davidanson.vscode-markdownlint",
+      "yzhang.markdown-all-in-one",
+      "tamasfe.even-better-toml"
+    ]
+  }
+}
