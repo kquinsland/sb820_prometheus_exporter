@@ -37,8 +37,9 @@ if getenv("LOG_LEVEL") not in LogLevel.__members__ or getenv("LOG_LEVEL") is Non
     print(f"Defaulting to {LogLevel.INFO} log level")
     log_level = LogLevel.INFO
 else:
-    print(f"Using log level {LogLevel.INFO}")
     log_level = LogLevel[getenv("LOG_LEVEL")]  # type: ignore
+    print(f"Using log level {log_level.value}")
+
 
 structlog.configure(
     wrapper_class=structlog.make_filtering_bound_logger(log_level.value)
