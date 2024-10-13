@@ -102,6 +102,7 @@ async def main():
             _e = "Unforeseen exception. Treating as non-fatal."
             log.error(_e, error=e)
             continue
+    await client.close()
 
 
 if __name__ == "__main__":
