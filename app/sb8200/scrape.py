@@ -75,7 +75,8 @@ async def do_modem_scrape(
                     _e = f"Modem indicated authentication details are incorrect. Check for extra/incorrect quotes in your env-vars? Status={resp.status}."
                 else:
                     _e = f"Failed to log in. Status={resp.status}."
-                raise ModemNotOkError(_e)
+                payload = await resp.text()
+                raise ModemNotOkError(_e, status_code=resp.status, payload=payload)
 
             csrf_token = await resp.text()
             log.debug("CSRF Token", token=csrf_token)
@@ -102,7 +103,8 @@ async def do_modem_scrape(
             metrics.c_meta_scrape_result.labels(resp.status, "connection_data").inc()
             if resp.status != 200:
                 _e = f"Failed to get connection status. Status={resp.status}"
-                raise ModemNotOkError(_e)
+                payload = await resp.text()
+                raise ModemNotOkError(_e, status_code=resp.status, payload=payload)
             raw_connection_state = await resp.text()
 
     # Quickly try to get the product info
@@ -119,7 +121,8 @@ async def do_modem_scrape(
             metrics.c_meta_scrape_result.labels(resp.status, "product_info").inc()
             if resp.status != 200:
                 _e = f"Failed to get product info. Status={resp.status}"
-                raise ModemNotOkError(_e)
+                payload = await resp.text()
+                raise ModemNotOkError(_e, status_code=resp.status, payload=payload)
             raw_product_info = await resp.text()
 
     # Assuming nothing went wrong, we can now parse the HTML
