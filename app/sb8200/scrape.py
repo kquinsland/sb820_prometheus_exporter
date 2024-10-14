@@ -67,14 +67,6 @@ async def do_login(cs: ClientSession) -> str:
 
             csrf_token = await resp.text()
             log.debug("CSRF Token", token=csrf_token)
-
-            # We need to parse the cookies and update the client's cookie jar
-            set_cookie_header = resp.headers.get("Set-Cookie")
-            if set_cookie_header:
-                cookie = http.cookies.SimpleCookie()
-                cookie.load(set_cookie_header)
-                cs.cookie_jar.update_cookies(cookie)
-
             log.debug("Cookie jar", count=len(cs.cookie_jar))
     log.info("Done with login.")
     return csrf_token

@@ -7,7 +7,7 @@ import asyncio
 from os import getenv
 
 import structlog
-from aiohttp import BasicAuth, ClientSession
+from aiohttp import BasicAuth, ClientSession, CookieJar
 from err.exceptions import ModemNotOkError, NoAuthTokenError
 from prometheus_client import start_http_server
 from sb8200.parse import (
@@ -71,6 +71,8 @@ async def main():
         auth=BasicAuth(MODEM_USERNAME, MODEM_PASSWORD),
         base_url=MODEM_BASE_URL,
         headers=REQUEST_HEADERS,
+        # unsafe=True: tell aiohttp to allow cookies on IP addresses
+        cookie_jar=CookieJar(unsafe=True)
     )
 
     csrf_token = None
