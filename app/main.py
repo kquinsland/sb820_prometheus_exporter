@@ -11,6 +11,7 @@ from aiohttp import BasicAuth, ClientSession
 from err.exceptions import ModemNotOkError, NoAuthTokenError
 from prometheus_client import start_http_server
 from sb8200.scrape import (
+    do_login,
     do_modem_scrape,
     update_connection_channel_metrics,
     update_connection_metrics,
@@ -68,10 +69,16 @@ async def main():
         headers=REQUEST_HEADERS,
     )
 
+    csrf_token = None
     while True:
 
         try:
-            connection_html, prod_info_html = await do_modem_scrape(client)
+            reuse_login = len(client.cookie_jar) > 0 and csrf_token is not None
+            if not reuse_login:
+                log.debug("Attempting to login.")
+                csrf_token = await do_login(client)
+
+            connection_html, prod_info_html = await do_modem_scrape(client, csrf_token)
 
             # High level connection info
             update_connection_metrics(connection_html)
