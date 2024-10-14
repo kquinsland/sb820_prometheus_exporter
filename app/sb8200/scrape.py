@@ -18,35 +18,22 @@ log = structlog.get_logger(__name__)
 CONN_STATUS_ENDPOINT = "/cmconnectionstatus.html"
 PROD_INFO_ENDPOINT = "/cmswinfo.html"
 
+# Modem uses very old TLS so we need to bend over backwards to pretend it's 2010
+##
+# pylint: disable = protected-access / W0212
+legacy_ssl_context = ssl._create_unverified_context(
+    protocol=ssl.PROTOCOL_SSLv23,
+    purpose=ssl.Purpose.SERVER_AUTH,
+    check_hostname=False,
+)
+legacy_ssl_context.set_ciphers("AES128-GCM-SHA256")
 
-async def do_modem_scrape(
-    cs: ClientSession,
-) -> tuple[BeautifulSoup, BeautifulSoup]:
+async def do_login(cs: ClientSession) -> str:
     """
-    Requests the firs HTML pages that contain the bulk of useful/graphable data from modem.
-
-    See notes in re_notes/auth.md
-    I don't know if it's a bug with the client-side JS, something on the modem or just a timing related thing but
-    when using a browser, requesting the modem product information right after landing on the connection info page
-    usually results in being sent back to log in.
-
-    Sometimes I can get around this by navigating to some other tab and then back to the product info tab but that's flaky.
-
-    For now, I'm going to go with the "log in, get csrf and then hit both targets" approach.
-    Hitting them both in quick succession seems to work which makes me think it's timing related but who knows.
+    Login, upd and return the CSRF token that must be included in all other requests.
     """
-
-    # Modem uses very old TLS so we need to bend over backwards to pretend it's 2010
-    ##
-    # pylint: disable = protected-access / W0212
-    legacy_ssl_context = ssl._create_unverified_context(
-        protocol=ssl.PROTOCOL_SSLv23,
-        purpose=ssl.Purpose.SERVER_AUTH,
-        check_hostname=False,
-    )
-    legacy_ssl_context.set_ciphers("AES128-GCM-SHA256")
-
-    # For reasons that I don't understand, the modem wants a PORTION of the Basic Auth string in the URL.
+    # For reasons that I don't understand, the modem wants the encoded username:password
+    # in both the Authorization: Basic header AND the URL.
     # If the token is not sent in the URL, the modem will redirect to the login page.
     # If the full basic auth string is not sent in the headers, the modem will redirect to the login page.
     ##
@@ -75,21 +62,35 @@ async def do_modem_scrape(
                     _e = f"Modem indicated authentication details are incorrect. Check for extra/incorrect quotes in your env-vars? Status={resp.status}."
                 else:
                     _e = f"Failed to log in. Status={resp.status}."
-                raise ModemNotOkError(_e)
+                payload = await resp.text()
+                raise ModemNotOkError(_e, status_code=resp.status, payload=payload)
 
             csrf_token = await resp.text()
             log.debug("CSRF Token", token=csrf_token)
-
-            # We need to parse the cookies and update the client's cookie jar
-            set_cookie_header = resp.headers.get("Set-Cookie")
-            if set_cookie_header:
-                cookie = http.cookies.SimpleCookie()
-                cookie.load(set_cookie_header)
-                cs.cookie_jar.update_cookies(cookie)
-
             log.debug("Cookie jar", count=len(cs.cookie_jar))
+    log.info("Done with login.")
+    return csrf_token
 
-    log.info("Done with login... attempting to get connection status data!")
+
+async def do_modem_scrape(
+    cs: ClientSession,
+    csrf_token: str,
+) -> tuple[BeautifulSoup, BeautifulSoup]:
+    """
+    Requests the firs HTML pages that contain the bulk of useful/graphable data from modem.
+
+    See notes in re_notes/auth.md
+    I don't know if it's a bug with the client-side JS, something on the modem or just a timing related thing but
+    when using a browser, requesting the modem product information right after landing on the connection info page
+    usually results in being sent back to log in.
+
+    Sometimes I can get around this by navigating to some other tab and then back to the product info tab but that's flaky.
+
+    For now, I'm going to go with the "log in, get csrf and then hit both targets" approach.
+    Hitting them both in quick succession seems to work which makes me think it's timing related but who knows.
+    """
+
+    log.debug("Attempting to get connection status")
     # With token, we can now attempt to get the data we want
     data_url_fragment = f"{CONN_STATUS_ENDPOINT}?ct_{csrf_token}"
 
@@ -102,7 +103,8 @@ async def do_modem_scrape(
             metrics.c_meta_scrape_result.labels(resp.status, "connection_data").inc()
             if resp.status != 200:
                 _e = f"Failed to get connection status. Status={resp.status}"
-                raise ModemNotOkError(_e)
+                payload = await resp.text()
+                raise ModemNotOkError(_e, status_code=resp.status, payload=payload)
             raw_connection_state = await resp.text()
 
     # Quickly try to get the product info
@@ -119,7 +121,8 @@ async def do_modem_scrape(
             metrics.c_meta_scrape_result.labels(resp.status, "product_info").inc()
             if resp.status != 200:
                 _e = f"Failed to get product info. Status={resp.status}"
-                raise ModemNotOkError(_e)
+                payload = await resp.text()
+                raise ModemNotOkError(_e, status_code=resp.status, payload=payload)
             raw_product_info = await resp.text()
 
     # Assuming nothing went wrong, we can now parse the HTML
