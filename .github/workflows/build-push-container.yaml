@@ -46,7 +46,7 @@ jobs:
           images: |
               ghcr.io/${{ github.repository }}
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           # For now, I only have amd64 nodes in k8s cluster
