@@ -403,7 +403,7 @@ wheels = [
 [[package]]
 name = "sb-exporter"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "beautifulsoup4" },

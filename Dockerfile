@@ -1,101 +1,79 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.17-labs
+# (we need this for --exclude in COPY)
 # Keep this syntax directive! It's used to enable Docker BuildKit
 ##
-# CLONE OF: https://gist.github.com/usr-ein/c42d98abca3cb4632ab0c2c6aff8c88a
+# This was inspired by https://hynek.me/articles/docker-uv/
+# It's a bit more complex than what I need so a decent amount of it is stripped out
 ##
+# Allow override via build-arg
+##
+ARG BASE_IMAGE=alpine:latest
+ARG PYTHON_VERSION="3.13"
 
-################################
-# PYTHON-BASE
-# Sets up all our shared environment variables
-################################
-FROM python:3.13-slim as python-base
+## Build / prep
+FROM ${BASE_IMAGE} AS build
+# We have to "consume" args declared in global scope to make them available in this context
+ARG PYTHON_VERSION
 
-# python
-ENV PYTHONUNBUFFERED=1 \
-  # prevents python creating .pyc files
-  PYTHONDONTWRITEBYTECODE=1 \
-  \
-  # pip
-  PIP_DISABLE_PIP_VERSION_CHECK=on \
-  PIP_DEFAULT_TIMEOUT=100 \
-  \
-  # poetry
-  # https://python-poetry.org/docs/configuration/#using-environment-variables
-  # See: https://github.com/python-poetry/poetry/releases
-  ##
-  POETRY_VERSION=1.7.1 \
-  # make poetry install to this location
-  POETRY_HOME="/opt/poetry" \
-  # make poetry create the virtual environment in the project's root
-  # it gets named `.venv`
-  POETRY_VIRTUALENVS_IN_PROJECT=true \
-  # do not ask any interactive question
-  POETRY_NO_INTERACTION=1 \
-  \
-  # paths
-  # this is where our requirements + virtual environment will live
-  PYSETUP_PATH="/opt/pysetup" \
-  VENV_PATH="/opt/pysetup/.venv"
+# Easier than curl ...
+##
+# Note: COPY does not support variable interpolation so we can't use ${UV_VERSION} here :(
+# See: https://github.com/moby/moby/issues/34482
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+# - Silence uv complaining about not being able to use hard links,
+# - tell uv to byte-compile packages for faster application startups,
+# - set the Python version to use
+# - and finally declare `/app/venv` as the target for `uv sync`.
+ENV UV_LINK_MODE=copy \
+  UV_COMPILE_BYTECODE=1 \
+  UV_PYTHON=python${PYTHON_VERSION} \
+  UV_PROJECT_ENVIRONMENT=/app/.venv
 
-# prepend poetry and venv to path
-ENV PATH="$POETRY_HOME/bin:$VENV_PATH/bin:$PATH"
+# Set up non-root user to own everything
+RUN addgroup -S app && adduser -S -D -h /app -G app app
 
+# And then use the user for the rest of the build
+USER app
 
-################################
-# BUILDER-BASE
-# Used to build deps + create our virtual environment
-################################
-FROM python-base as builder-base
-RUN apt-get update \
-  && apt-get install --no-install-recommends -y \
-  # deps for installing poetry
-  curl \
-  # deps for building python deps
-  build-essential
+# Copy bits and pieces to the container
+COPY --chown=app:app ./app /app
 
-# install poetry - respects $POETRY_VERSION & $POETRY_HOME
-# The --mount will mount the buildx cache directory to where
-# Poetry and Pip store their cache so that they can re-use it
-RUN --mount=type=cache,target=/root/.cache \
-  curl -sSL https://install.python-poetry.org | python3 -
+# We need these for the dependencies that `uv` will install
+# We won't copy them to the final container, though
+COPY --chown=app:app ./pyproject.toml /app/pyproject.toml
+COPY --chown=app:app ./uv.lock /app/uv.lock
 
-# copy project requirement files here to ensure they will be cached.
-WORKDIR $PYSETUP_PATH
-COPY poetry.lock pyproject.toml ./
-
-# install runtime deps - uses $POETRY_VIRTUALENVS_IN_PROJECT internally
-RUN --mount=type=cache,target=/root/.cache \
-  poetry install --without=dev
+# Install all the (non-dev) dependencies + the venv
+RUN <<EOT
+cd /app
+uv sync --locked \
+--no-dev
+EOT
 
 
-################################
-# DEVELOPMENT
-# Image used during development / testing
-################################
-FROM python-base as development
-WORKDIR $PYSETUP_PATH
+# So the /app directory has everything we need to run the script (and more!)
+FROM ${BASE_IMAGE} AS runtime
 
-# copy in our built poetry + venv
-COPY --from=builder-base $POETRY_HOME $POETRY_HOME
-COPY --from=builder-base $PYSETUP_PATH $PYSETUP_PATH
 
-# quicker install as runtime deps are already installed
-RUN --mount=type=cache,target=/root/.cache \
-  poetry install --with=dev
+# We need to mirror the app user/group from the build stage
+# Set up non-root user to own everything
+RUN addgroup -S app && adduser -S -D -h /app -G app app
 
-# will become mount point of our code
+# And then use the user for the rest of the build
+USER app
+
+# Ok, we have `app` user/group and an empty `/app` directory
+# Copy everything over except the dependency/uv metadata
+# Note, we need "experimental" syntax support for --exclude
+# See: https://docs.docker.com/reference/dockerfile/#copy---exclude
+COPY --from=build --chown=app:app --exclude=*.toml --exclude=*.lock --exclude=.cache /app /app
+
+# Add the uv installed python/bins to the PATH
+ENV PATH=/app/.venv/bin:$PATH
+
+# See: https://hynek.me/articles/docker-signals/
+STOPSIGNAL SIGINT
 WORKDIR /app
-
-CMD ["/app/main.py"]
-
-
-################################
-# PRODUCTION
-# Final image used for runtime
-################################
-FROM python-base as production
-COPY --from=builder-base $PYSETUP_PATH $PYSETUP_PATH
-COPY ./app /app/
-WORKDIR /app
-CMD ["/app/main.py"]
+# Because we put python in the path, we can just run the script and the shebang will take care of the rest
+CMD ["./main.py"]
