@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.17-labs
+# syntax=docker/dockerfile:1.18-labs
 # (we need this for --exclude in COPY)
 # Keep this syntax directive! It's used to enable Docker BuildKit
 ##
