@@ -10,7 +10,7 @@ packages = [{ include = "app" }]
 python = "^3.11"
 structlog = "^24.1.0"
 beautifulsoup4 = "^4.12.3"
-prometheus-client = "^0.20.0"
+prometheus-client = "^0.22.0"
 aiohttp = "^3.9.3"
 
 
