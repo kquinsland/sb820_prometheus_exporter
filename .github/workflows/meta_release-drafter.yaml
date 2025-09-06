@@ -1,0 +1,37 @@
+name: Release Notes Drafter
+
+# as PRs are merged, update the draft release notes
+on:
+    push:
+        branches:
+            - main
+    # pull_request event is required only for autolabeler
+    pull_request:
+        # Only following types are handled by the action, but one can default to all as well
+        types:
+            - opened
+            - reopened
+            - synchronize
+
+permissions:
+    contents: read
+
+jobs:
+    update_release_draft:
+        name: Update Release Draft
+        runs-on: ubuntu-latest
+        permissions:
+            # write permission is required to create a github release
+            contents: write
+            # write permission is required for autolabeler
+            # otherwise, read permission is required at least
+            pull-requests: write
+
+        steps:
+            - name: Update Release Notes
+              id: update_release_draft
+              uses: release-drafter/release-drafter@b1476f6e6eb133afa41ed8589daba6dc69b4d3f5 #v6.1.0
+              with:
+                  commitish: main
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
