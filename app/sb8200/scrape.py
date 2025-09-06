@@ -2,7 +2,6 @@
 Implementation of the scrape and metric update functions
 """
 
-import http.cookies
 import ssl
 from collections import OrderedDict
 from datetime import timedelta
@@ -27,6 +26,7 @@ legacy_ssl_context = ssl._create_unverified_context(
     check_hostname=False,
 )
 legacy_ssl_context.set_ciphers("AES128-GCM-SHA256")
+
 
 async def do_login(cs: ClientSession) -> str:
     """
@@ -276,7 +276,6 @@ def _do_metrics_update(
         str, dict[str, str | None | metrics.Gauge | metrics.Summary | metrics.Counter]
     ],
 ):
-
     # See note in parse.py: it's not trivial to get the correct headers so we just index by position
     #   and hope for the best!
     # Need a copy of the column headers so we can figure out which column is the channel ID column.

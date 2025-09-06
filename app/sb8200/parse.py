@@ -12,9 +12,11 @@ from bs4 import BeautifulSoup
 
 log = structlog.get_logger(__name__)
 
+
 def is_login_page(soup: BeautifulSoup) -> bool:
     """Check if the page is the login page"""
     return soup.find("title").text.strip() == "Login"
+
 
 def get_modem_info(soup: BeautifulSoup) -> dict[str, None | str | timedelta]:
     """Attempts to extract some modem information from the product-info page.

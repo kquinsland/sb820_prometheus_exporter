@@ -8,8 +8,14 @@ OrderedDict is used to associate the column header / position in the row with th
 
 from collections import OrderedDict
 
-from prometheus_client import (Counter, Enum, Gauge, Info, Summary,
-                               disable_created_metrics)
+from prometheus_client import (
+    Counter,
+    Enum,
+    Gauge,
+    Info,
+    Summary,
+    disable_created_metrics,
+)
 
 # By default, client will automatically create a "_created" meta metric for
 #   each metric defined below.
