@@ -1,0 +1,97 @@
+---
+name: Python Lint and Test
+
+on:
+    # Should it be needed, allow manual triggering
+    workflow_dispatch:
+    # Allow calling from other GHA workflows.
+    # See: https://docs.github.com/en/actions/sharing-automations/reusing-workflows#creating-a-reusable-workflow
+    workflow_call:
+    # As soon as an open PR has modified python files, run the checks.
+    # This flow will re-run the checks if new commits are added to the PR.
+    pull_request:
+        paths:
+            - "**.py"
+# Start with no permissions, then allow per job/action
+permissions: {}
+
+jobs:
+    lint-format:
+        name: Lint and Format with Ruff
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+
+        steps:
+            - name: Checkout Repo
+              id: checkout
+              uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+              with:
+                  persist-credentials: false
+                  fetch-depth: 0
+
+            - name: Install uv
+              id: setup-uv
+              uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6 # v6.6.1
+              with:
+                  enable-cache: true
+                  ignore-nothing-to-cache: true
+                  cache-dependency-glob: "uv.lock"
+
+            - name: Set up Python
+              id: setup-python
+              run: uv python install
+
+            - name: Check for lint violations
+              id: check-lint-rules
+              uses: astral-sh/ruff-action@57714a7c8a2e59f32539362ba31877a1957dded1 # v3.5.1
+              with:
+                  args: check --output-format=github .
+
+            - name: Check for formatting violations
+              id: check-well-formatted
+              uses: astral-sh/ruff-action@57714a7c8a2e59f32539362ba31877a1957dded1 # v3.5.1
+              # We explicitly do not fix here!
+              # Show what would/should be changes and return non-zero if there are any.
+              with:
+                  args: format --check --diff .
+
+    # Assuming code doesn't smell, make sure it (still) works.
+    test:
+        name: Run Pytest
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        # If any of the linting/formatting steps fail, do not run the tests.
+        needs: lint-format
+        env:
+            # This is needed to make sure that the tests can find the package.
+            PYTHONPATH: .
+
+        steps:
+            - name: Checkout repository
+              id: checkout
+              uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+              with:
+                  persist-credentials: false
+                  fetch-depth: 0
+
+            - name: Install uv
+              id: setup-uv
+              uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6 # v6.6.1
+              with:
+                  enable-cache: true
+                  ignore-nothing-to-cache: true
+                  cache-dependency-glob: "uv.lock"
+
+            - name: Set up Python
+              id: setup-python
+              run: uv python install
+
+            - name: Install the project
+              id: install-dependencies
+              run: uv sync --all-extras --dev
+
+            - name: Run tests
+              id: run-tests
+              run: uv run pytest

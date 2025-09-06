@@ -1,0 +1,24 @@
+---
+name: Handle Release
+
+on:
+  # For manual trigger if needed
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+# Start with no permissions, then allow per job/action
+permissions: {}
+
+jobs:
+  # Ideally, the release wouldn't be allowed to proceed if tests fail.
+  # We need to handle the manual workflow_dispatch case, though so it doesn't
+  #    hurt to have the tests run first, again.
+  release_container:
+    uses: ./.github/workflows/ci_build-push-container.yaml
+    permissions:
+      # Needed for the test job to run
+      contents: read
+      # Needed for container image push
+      packages: write
