@@ -10,7 +10,7 @@ function authenticateUser(user, password)
     var token = user + ":" + password;
 
     // Base64 Encoding -> btoa
-    var hash = btoa(token); 
+    var hash = btoa(token);
 
     var auth = hash;
     sessionStorage.setItem('auth', auth);
@@ -58,7 +58,7 @@ function authenticateUser(user, password)
     var token = user + ":" + password;
 
     // Base64 Encoding -> btoa
-    var hash = btoa(token); 
+    var hash = btoa(token);
 
     var auth = hash;
     sessionStorage.setItem('auth', auth);

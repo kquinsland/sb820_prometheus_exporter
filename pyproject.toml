@@ -6,14 +6,18 @@ authors = [{ name = "Karl Quinsland" }]
 requires-python = "<4.0,>=3.13"
 readme = "readme.md"
 dependencies = [
-  "structlog>=24.1.0,<25",
-  "beautifulsoup4>=4.12.3,<5",
-  "prometheus-client>=0.20.0,<0.21",
-  "aiohttp>=3.9.3,<4",
+    "aiohttp>=3.12.15",
+    "beautifulsoup4>=4.13.5",
+    "prometheus-client>=0.22.1",
+    "structlog>=25.4.0",
 ]
 
 [dependency-groups]
-dev = ["isort>=5.13.2,<6", "black>=24.2.0,<25", "pylint>=3.1.0,<4"]
+dev = [
+    "black>=25.1.0",
+    "isort>=6.0.1",
+    "pylint>=3.3.8",
+]
 
 [tool.hatch.build.targets.sdist]
 include = ["app"]
