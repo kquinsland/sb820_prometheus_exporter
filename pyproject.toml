@@ -16,7 +16,7 @@ aiohttp = "^3.9.3"
 
 [tool.poetry.group.dev.dependencies]
 isort = "^5.13.2"
-black = "^24.2.0"
+black = "^25.0.0"
 pylint = "^3.1.0"
 
 [build-system]
