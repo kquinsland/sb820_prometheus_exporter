@@ -1,0 +1,115 @@
+---
+# See: https://github.com/release-drafter/release-drafter?tab=readme-ov-file
+name-template: "v$RESOLVED_VERSION 🌈"
+tag-template: "v$RESOLVED_VERSION"
+# Allow explicitly setting version via labels
+version-resolver:
+  major:
+    labels:
+      - "major"
+  minor:
+    labels:
+      - "minor"
+  patch:
+    labels:
+      - "patch"
+  default: patch
+
+# Make release notes look a bit prettier :)
+categories:
+  - label: "ci"
+    title: "🤖 Continuous Integration"
+
+  - label: "chore"
+    title: "🧰 Maintenance/Chore"
+
+  - title: "⬆️ Dependencies"
+    collapse-after: 3
+    labels:
+      - "dependencies"
+
+  - label: "docs"
+    title: "📚 Documentation"
+
+  - label: "feat"
+    title: "🚀 Features"
+
+  - label: "fix"
+    title: "🐛 Bug Fixes"
+
+  - label: "refactor"
+    title: "🏗️ Refactor"
+
+  - label: "revert"
+    title: "🔙 Revert"
+
+  - label: "test"
+    title: "🕵️ Tests"
+
+# Conditions are logical OR
+# See: https://github.com/release-drafter/release-drafter?tab=readme-ov-file#autolabeler
+autolabeler:
+  - label: "ci"
+    files:
+      - ".github/workflows/*"
+    title:
+      - "/ci/i"
+
+  - label: "chore"
+    title:
+      - "/chore/i"
+      # Renovate will open PRs with titles like:
+      #     chore(deps): update <...> to v41.43.0
+      - "/chore(deps):/i"
+
+  # Create a dedicated label for dependencies so we can tweak how they're rendered out vs regular 'chores'
+  - label: "dependencies"
+    title:
+      - "/dependency/i"
+      - "/dependencies/i"
+      - "/deps/i"
+      # Renovate will open PRs with titles like:
+      #     chore(deps): update <...> to v41.43.0
+      - "/chore(deps):/i"
+
+    files:
+      - "uv.lock"
+
+  - label: "docs"
+    files:
+      - "*.md"
+    title:
+      - "/docs/i"
+
+  - label: "feat"
+    branch:
+      - '/feature\/.+/'
+
+  - label: "fix"
+    title:
+      - "/fix/i"
+      - "/bug/i"
+      - "/bugfix/i"
+    branch:
+      - '/fix\/.+/'
+
+  - label: "refactor"
+    title:
+      - "/refactor/i"
+
+  - label: "revert"
+    title:
+      - "/revert/i"
+
+  - label: "test"
+    files:
+      - "tests/**.py"
+    title:
+      - "/test/i"
+      - "/tests/i"
+
+# How to render everything out
+template: |
+  ## Changes
+
+  $CHANGES
