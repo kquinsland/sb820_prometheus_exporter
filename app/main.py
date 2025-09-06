@@ -3,6 +3,7 @@
 Main / entry point for SB family of modem exporter.
 
 """
+
 import asyncio
 from os import getenv
 
@@ -72,12 +73,11 @@ async def main():
         base_url=MODEM_BASE_URL,
         headers=REQUEST_HEADERS,
         # unsafe=True: tell aiohttp to allow cookies on IP addresses
-        cookie_jar=CookieJar(unsafe=True)
+        cookie_jar=CookieJar(unsafe=True),
     )
 
     csrf_token = None
     while True:
-
         try:
             reuse_login = len(client.cookie_jar) > 0 and csrf_token is not None
             if not reuse_login:
@@ -92,7 +92,9 @@ async def main():
                     log.error("After skipping auth, Login page detected. Re-authing.")
                 else:
                     # Often, the first login does not work so we have to login again
-                    log.error("Login succeeded but stats page still returned Login page")
+                    log.error(
+                        "Login succeeded but stats page still returned Login page"
+                    )
                     log.info(
                         f"Sleeping {RE_LOGIN_INTERVAL_SECONDS} seconds before next login"
                     )
