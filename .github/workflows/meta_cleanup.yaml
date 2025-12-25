@@ -6,8 +6,8 @@ name: Delete old workflow runs
 on:
   # See: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#schedule
   schedule:
-    # Every day at 11 AM UTC which is 4 AM UTC
-    - cron: "* 11 * * *"
+    # Every day at 11:25 AM UTC
+    - cron: "25 11 * * *"
   # Or manually if needed
   workflow_dispatch:
     inputs:
