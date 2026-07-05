@@ -7,7 +7,7 @@ from collections import OrderedDict
 from datetime import timedelta
 
 import structlog
-from aiohttp import ClientSession
+from aiohttp import BasicAuth, ClientSession
 from bs4 import BeautifulSoup
 from err.exceptions import ModemHtmlError, ModemNotOkError, NoAuthTokenError
 from sb8200 import metrics, parse
@@ -28,21 +28,20 @@ legacy_ssl_context = ssl._create_unverified_context(
 legacy_ssl_context.set_ciphers("AES128-GCM-SHA256")
 
 
-async def do_login(cs: ClientSession) -> str:
+async def do_login(cs: ClientSession, login: str, password: str) -> str:
     """
-    Login, upd and return the CSRF token that must be included in all other requests.
+    Login and return the CSRF token that must be included in all other requests.
     """
+    if login is None or password is None:
+        raise NoAuthTokenError("Missing modem username or password")
+
     # For reasons that I don't understand, the modem wants the encoded username:password
     # in both the Authorization: Basic header AND the URL.
     # If the token is not sent in the URL, the modem will redirect to the login page.
     # If the full basic auth string is not sent in the headers, the modem will redirect to the login page.
     ##
-    # Pylance is technically correct here; there is _a chance_ that the auth token is None.
-    if cs.auth is not None:
-        _auth_token = cs.auth.encode().split(" ")[1]
-    else:
-        raise NoAuthTokenError("No auth token found")
-
+    auth = BasicAuth(login, password)
+    _auth_token = auth.encode().split(" ")[1]
     login_url_fragment = f"{CONN_STATUS_ENDPOINT}?login_{_auth_token}"
 
     # Attempt logging in. If credentials are accepted, we'll get a CSRF token
@@ -50,7 +49,10 @@ async def do_login(cs: ClientSession) -> str:
     # s_meta_scrape_time has only one label: scrape_target
     with metrics.s_meta_scrape_time.labels("login").time():
         async with cs.request(
-            method="GET", url=login_url_fragment, ssl=legacy_ssl_context
+            method="GET",
+            url=login_url_fragment,
+            auth=auth,
+            ssl=legacy_ssl_context,
         ) as resp:
             metrics.c_meta_scrape_result.labels(resp.status, "login").inc()
             if resp.status != 200:
