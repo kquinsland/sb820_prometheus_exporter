@@ -162,6 +162,7 @@ async def main():
         except Exception as e:
             _e = "Unforeseen exception. Treating as non-fatal."
             log.error(_e, error=e)
+            await asyncio.sleep(METRICS_POLL_INTERVAL_SECONDS)
             continue
     await client.close()
 
