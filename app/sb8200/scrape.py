@@ -237,6 +237,18 @@ def update_connection_metrics(connection_info_html: BeautifulSoup):
     # startup_info will be a dict where the keys come from the HTML and should match the keys in SU_METRICS
     startup_info = parse.extract_startup_procedure(connection_info_html)
 
+    # Drop stale series before repopulating (same reasoning as the channel gauges
+    #   in _do_metrics_update). These metrics are labeled by the volatile
+    #   "comment" text, so a state change (e.g. Operational -> Not Synchronized)
+    #   otherwise leaves the old comment's series frozen alongside the new one.
+    #   Guard on a non-empty parse so a failure doesn't wipe them with no refill.
+    if startup_info:
+        for _entry in metrics.SU_METRICS.values():
+            if _entry is not None and isinstance(
+                _entry["metric"], (metrics.Gauge, metrics.Enum)
+            ):
+                _entry["metric"].clear()
+
     # The first column is called "procedure"
     for procedure, data in startup_info.items():
         if procedure not in metrics.SU_METRICS:
@@ -293,6 +305,17 @@ def _do_metrics_update(
         return
     # We know know which column index is the channel ID.
     ch_id_idx = _headers.index("Channel ID")
+
+    # Drop stale gauge series before repopulating: a gauge keyed by channel_id
+    #   (or lock_status / modulation) keeps its last value for any channel
+    #   absent from this scrape, because prometheus_client only touches label
+    #   sets you .set() again. During an outage the modem lists a single unsynced
+    #   channel (id 0), so every real channel would otherwise freeze at its
+    #   last-good value. Clearing makes absent channels drop out instead. Drop
+    #   only Gauges, not the Counters/Summaries, which accumulate over time.
+    for _entry in metrics_map.values():
+        if _entry is not None and isinstance(_entry["metric"], metrics.Gauge):
+            _entry["metric"].clear()
 
     # If the length of the row matches the length of headers, we can assume that the row was parsed
     #   without issue.
