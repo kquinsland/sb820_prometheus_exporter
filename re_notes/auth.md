@@ -121,3 +121,10 @@ In browser, I can reliably? get access to product info IF i go to change user pa
 
 Other than a count by type of event level/number, there's not much in the way of metrics there.
 The event log data is more useful for scrape -> forward to ELK stack or something similar.
+
+## Login 401 after boot or 10 minutes idle
+
+The login endpoint (`cmconnectionstatus.html?login_<b64>`) returns **401 to
+correct credentials** on the *first* login either
+just after a reboot, or more than 10 minutes since the last successful login
+(I did not test a long previous session though to distinguish between 10 minutes since login or 10 minutes since any logged in request. I also did not test whether unauthenticated requests reset this timer).

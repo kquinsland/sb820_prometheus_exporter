@@ -9,7 +9,12 @@ from datetime import timedelta
 import structlog
 from aiohttp import BasicAuth, ClientSession
 from bs4 import BeautifulSoup
-from err.exceptions import ModemHtmlError, ModemNotOkError, NoAuthTokenError
+from err.exceptions import (
+    ModemHtmlError,
+    ModemNotOkError,
+    ModemUnauthorizedError,
+    NoAuthTokenError,
+)
 from sb8200 import metrics, parse
 
 log = structlog.get_logger(__name__)
@@ -56,15 +61,15 @@ async def do_login(cs: ClientSession, login: str, password: str) -> str:
         ) as resp:
             metrics.c_meta_scrape_result.labels(resp.status, "login").inc()
             if resp.status != 200:
-                # In testing, i've only ever seen 401 and 200s
-                # ALSO interesting, JUST AFTER REBOOT, 401 with correct credentials ... so don't make this
-                #   a total panic failure
-                if resp.status == 401:
-                    # Exception: Failed to log in. Status=401
-                    _e = f"Modem indicated authentication details are incorrect. Check for extra/incorrect quotes in your env-vars? Status={resp.status}."
-                else:
-                    _e = f"Failed to log in. Status={resp.status}."
+                # In testing, only ever 200 and 401. A 401 is a
+                #   ModemUnauthorizedError: NOT necessarily bad credentials --
+                #   the modem 401s the first login after a reboot with correct
+                #   credentials -- so main.py retries it a bounded number of
+                #   times. Any other non-200 is a plain ModemNotOkError.
                 payload = await resp.text()
+                if resp.status == 401:
+                    raise ModemUnauthorizedError(payload=payload)
+                _e = f"Failed to log in. Status={resp.status}."
                 raise ModemNotOkError(_e, status_code=resp.status, payload=payload)
 
             csrf_token = await resp.text()
