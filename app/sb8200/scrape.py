@@ -9,7 +9,7 @@ from datetime import timedelta
 import structlog
 from aiohttp import ClientSession
 from bs4 import BeautifulSoup
-from err.exceptions import ModemNotOkError, NoAuthTokenError
+from err.exceptions import ModemHtmlError, ModemNotOkError, NoAuthTokenError
 from sb8200 import metrics, parse
 
 log = structlog.get_logger(__name__)
@@ -143,13 +143,20 @@ def update_connection_channel_metrics(bs: BeautifulSoup) -> None:
     # Testing that a datetime could be parsed out at all is valuable, though.
     # It's worth the effort for the uptime though as that has a lot of diagnostic value.
     ##
-    parsed_time = parse.get_current_system_time(bs)
-    if parsed_time is None:
-        log.error("Failed to parse modem datetime. HTML scrape error?")
+    try:
+        parsed_time = parse.get_current_system_time(bs)
+    except ModemHtmlError as e:
+        # systime element missing -- an unexpected page/markup, worth surfacing.
+        log.warning("Could not parse modem system time; HTML may have changed", error=e)
         metrics.c_meta_parse_result.labels("datetime", False).inc()
     else:
-        log.debug("Modem has datetime of", dt=parsed_time)
-        metrics.c_meta_parse_result.labels("datetime", True).inc()
+        if parsed_time is None:
+            # Clock unset: the modem has no DOCSIS sync (outage). Benign/expected.
+            log.debug("Modem clock unset; no DOCSIS link")
+            metrics.c_meta_parse_result.labels("datetime", False).inc()
+        else:
+            log.debug("Modem has datetime of", dt=parsed_time)
+            metrics.c_meta_parse_result.labels("datetime", True).inc()
 
     # Parse out the up/down stream channel data
     log.debug("Attempting to parse downstream channel info from HTML...")

@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 
 import structlog
 from bs4 import BeautifulSoup
+from err.exceptions import ModemHtmlError
 
 log = structlog.get_logger(__name__)
 
@@ -74,17 +75,25 @@ def get_modem_info(soup: BeautifulSoup) -> dict[str, None | str | timedelta]:
 
 
 def get_current_system_time(soup: BeautifulSoup) -> datetime | None:
-    """Attempts to pull the current system time from the HTML source."""
+    """Pull the modem's current system time from the HTML source.
+
+    Returns None when the modem's clock is unset: it renders the placeholder
+    "--- --- -- --:--:-- ----" whenever it has no DOCSIS sync (ISP outage, cable
+    unplugged, still booting) -- a benign, expected state. Raises ModemHtmlError
+    when the systime element is missing entirely, which is unexpected (a
+    different page, or the markup changed); the caller decides how to react.
+    """
     # Towards the very end of the page is a single <p> tag with the system time
     # <p id="systime" align="center"><strong>Current System Time:</strong> Tue Mar 12 14:20:59 2024</p>
-    if (system_time_row := soup.find("p", id="systime")) is not None:
-        system_time_str = system_time_row.text.strip()
-        # The format is "Day Mon dd hh:mm:ss yyyy"
-        datetime_str = system_time_str.split(":", 1)[1].strip()
-        return datetime.strptime(datetime_str, "%a %b %d %H:%M:%S %Y")
+    system_time_row = soup.find("p", id="systime")
+    if system_time_row is None:
+        raise ModemHtmlError("Could not find the system-time element (#systime)")
 
-    log.warning("Failed to find system time. Scrape error?")
-    return None
+    # The format is "Day Mon dd hh:mm:ss yyyy"
+    datetime_str = system_time_row.text.strip().split(":", 1)[1].strip()
+    if datetime_str == "--- --- -- --:--:-- ----":
+        return None
+    return datetime.strptime(datetime_str, "%a %b %d %H:%M:%S %Y")
 
 
 def extract_startup_procedure(soup: BeautifulSoup) -> dict[str, dict[str, str]]:

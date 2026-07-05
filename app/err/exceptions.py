@@ -8,6 +8,13 @@ class NoAuthTokenError(Exception):
         super().__init__(message, status_code, payload)
 
 
+class ModemHtmlError(Exception):
+    """The modem returned HTML we could not parse as expected.
+
+    e.g. an element we rely on is missing -- an unexpected page or a
+    firmware/markup change, as opposed to an expected empty/placeholder value."""
+
+
 class ModemNotOkError(Exception):
     """Exception for non-200/OK responses from modem."""
 
