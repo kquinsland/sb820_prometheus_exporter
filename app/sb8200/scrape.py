@@ -7,9 +7,14 @@ from collections import OrderedDict
 from datetime import timedelta
 
 import structlog
-from aiohttp import ClientSession
+from aiohttp import BasicAuth, ClientSession
 from bs4 import BeautifulSoup
-from err.exceptions import ModemNotOkError, NoAuthTokenError
+from err.exceptions import (
+    ModemHtmlError,
+    ModemNotOkError,
+    ModemUnauthorizedError,
+    NoAuthTokenError,
+)
 from sb8200 import metrics, parse
 
 log = structlog.get_logger(__name__)
@@ -28,21 +33,20 @@ legacy_ssl_context = ssl._create_unverified_context(
 legacy_ssl_context.set_ciphers("AES128-GCM-SHA256")
 
 
-async def do_login(cs: ClientSession) -> str:
+async def do_login(cs: ClientSession, login: str, password: str) -> str:
     """
-    Login, upd and return the CSRF token that must be included in all other requests.
+    Login and return the CSRF token that must be included in all other requests.
     """
+    if login is None or password is None:
+        raise NoAuthTokenError("Missing modem username or password")
+
     # For reasons that I don't understand, the modem wants the encoded username:password
     # in both the Authorization: Basic header AND the URL.
     # If the token is not sent in the URL, the modem will redirect to the login page.
     # If the full basic auth string is not sent in the headers, the modem will redirect to the login page.
     ##
-    # Pylance is technically correct here; there is _a chance_ that the auth token is None.
-    if cs.auth is not None:
-        _auth_token = cs.auth.encode().split(" ")[1]
-    else:
-        raise NoAuthTokenError("No auth token found")
-
+    auth = BasicAuth(login, password)
+    _auth_token = auth.encode().split(" ")[1]
     login_url_fragment = f"{CONN_STATUS_ENDPOINT}?login_{_auth_token}"
 
     # Attempt logging in. If credentials are accepted, we'll get a CSRF token
@@ -50,19 +54,22 @@ async def do_login(cs: ClientSession) -> str:
     # s_meta_scrape_time has only one label: scrape_target
     with metrics.s_meta_scrape_time.labels("login").time():
         async with cs.request(
-            method="GET", url=login_url_fragment, ssl=legacy_ssl_context
+            method="GET",
+            url=login_url_fragment,
+            auth=auth,
+            ssl=legacy_ssl_context,
         ) as resp:
             metrics.c_meta_scrape_result.labels(resp.status, "login").inc()
             if resp.status != 200:
-                # In testing, i've only ever seen 401 and 200s
-                # ALSO interesting, JUST AFTER REBOOT, 401 with correct credentials ... so don't make this
-                #   a total panic failure
-                if resp.status == 401:
-                    # Exception: Failed to log in. Status=401
-                    _e = f"Modem indicated authentication details are incorrect. Check for extra/incorrect quotes in your env-vars? Status={resp.status}."
-                else:
-                    _e = f"Failed to log in. Status={resp.status}."
+                # In testing, only ever 200 and 401. A 401 is a
+                #   ModemUnauthorizedError: NOT necessarily bad credentials --
+                #   the modem 401s the first login after a reboot with correct
+                #   credentials -- so main.py retries it a bounded number of
+                #   times. Any other non-200 is a plain ModemNotOkError.
                 payload = await resp.text()
+                if resp.status == 401:
+                    raise ModemUnauthorizedError(payload=payload)
+                _e = f"Failed to log in. Status={resp.status}."
                 raise ModemNotOkError(_e, status_code=resp.status, payload=payload)
 
             csrf_token = await resp.text()
@@ -143,13 +150,20 @@ def update_connection_channel_metrics(bs: BeautifulSoup) -> None:
     # Testing that a datetime could be parsed out at all is valuable, though.
     # It's worth the effort for the uptime though as that has a lot of diagnostic value.
     ##
-    parsed_time = parse.get_current_system_time(bs)
-    if parsed_time is None:
-        log.error("Failed to parse modem datetime. HTML scrape error?")
+    try:
+        parsed_time = parse.get_current_system_time(bs)
+    except ModemHtmlError as e:
+        # systime element missing -- an unexpected page/markup, worth surfacing.
+        log.warning("Could not parse modem system time; HTML may have changed", error=e)
         metrics.c_meta_parse_result.labels("datetime", False).inc()
     else:
-        log.debug("Modem has datetime of", dt=parsed_time)
-        metrics.c_meta_parse_result.labels("datetime", True).inc()
+        if parsed_time is None:
+            # Clock unset: the modem has no DOCSIS sync (outage). Benign/expected.
+            log.debug("Modem clock unset; no DOCSIS link")
+            metrics.c_meta_parse_result.labels("datetime", False).inc()
+        else:
+            log.debug("Modem has datetime of", dt=parsed_time)
+            metrics.c_meta_parse_result.labels("datetime", True).inc()
 
     # Parse out the up/down stream channel data
     log.debug("Attempting to parse downstream channel info from HTML...")
@@ -230,6 +244,18 @@ def update_connection_metrics(connection_info_html: BeautifulSoup):
     # startup_info will be a dict where the keys come from the HTML and should match the keys in SU_METRICS
     startup_info = parse.extract_startup_procedure(connection_info_html)
 
+    # Drop stale series before repopulating (same reasoning as the channel gauges
+    #   in _do_metrics_update). These metrics are labeled by the volatile
+    #   "comment" text, so a state change (e.g. Operational -> Not Synchronized)
+    #   otherwise leaves the old comment's series frozen alongside the new one.
+    #   Guard on a non-empty parse so a failure doesn't wipe them with no refill.
+    if startup_info:
+        for _entry in metrics.SU_METRICS.values():
+            if _entry is not None and isinstance(
+                _entry["metric"], (metrics.Gauge, metrics.Enum)
+            ):
+                _entry["metric"].clear()
+
     # The first column is called "procedure"
     for procedure, data in startup_info.items():
         if procedure not in metrics.SU_METRICS:
@@ -286,6 +312,17 @@ def _do_metrics_update(
         return
     # We know know which column index is the channel ID.
     ch_id_idx = _headers.index("Channel ID")
+
+    # Drop stale gauge series before repopulating: a gauge keyed by channel_id
+    #   (or lock_status / modulation) keeps its last value for any channel
+    #   absent from this scrape, because prometheus_client only touches label
+    #   sets you .set() again. During an outage the modem lists a single unsynced
+    #   channel (id 0), so every real channel would otherwise freeze at its
+    #   last-good value. Clearing makes absent channels drop out instead. Drop
+    #   only Gauges, not the Counters/Summaries, which accumulate over time.
+    for _entry in metrics_map.values():
+        if _entry is not None and isinstance(_entry["metric"], metrics.Gauge):
+            _entry["metric"].clear()
 
     # If the length of the row matches the length of headers, we can assume that the row was parsed
     #   without issue.

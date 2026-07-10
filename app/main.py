@@ -8,8 +8,8 @@ import asyncio
 from os import getenv
 
 import structlog
-from aiohttp import BasicAuth, ClientSession, CookieJar
-from err.exceptions import ModemNotOkError, NoAuthTokenError
+from aiohttp import ClientSession, CookieJar
+from err.exceptions import ModemNotOkError, ModemUnauthorizedError, NoAuthTokenError
 from prometheus_client import start_http_server
 from sb8200.parse import (
     is_login_page,
@@ -37,6 +37,10 @@ MODEM_PASSWORD = getenv("MODEM_PASSWORD", None)
 METRICS_PORT = int(getenv("METRICS_PORT", "8200"))
 METRICS_POLL_INTERVAL_SECONDS = int(getenv("METRICS_POLL_INTERVAL_SECONDS", "60"))
 RE_LOGIN_INTERVAL_SECONDS = int(getenv("RE_LOGIN_INTERVAL_SECONDS", "5"))
+# The modem intermittently 401s a login (see the ModemUnauthorizedError
+#   handler), so retry a bounded number of times before treating it as a real
+#   auth failure.
+LOGIN_401_MAX_RETRIES = int(getenv("LOGIN_401_MAX_RETRIES", "2"))
 
 
 if getenv("LOG_LEVEL") not in LogLevel.__members__ or getenv("LOG_LEVEL") is None:
@@ -69,7 +73,6 @@ async def main():
 
     log.debug("Setting up connection to modem...")
     client = ClientSession(
-        auth=BasicAuth(MODEM_USERNAME, MODEM_PASSWORD),
         base_url=MODEM_BASE_URL,
         headers=REQUEST_HEADERS,
         # unsafe=True: tell aiohttp to allow cookies on IP addresses
@@ -77,12 +80,13 @@ async def main():
     )
 
     csrf_token = None
+    login_401_retries = 0
     while True:
         try:
             reuse_login = len(client.cookie_jar) > 0 and csrf_token is not None
             if not reuse_login:
                 log.debug("Attempting to login.")
-                csrf_token = await do_login(client)
+                csrf_token = await do_login(client, MODEM_USERNAME, MODEM_PASSWORD)
 
             connection_html, prod_info_html = await do_modem_scrape(client, csrf_token)
 
@@ -101,6 +105,9 @@ async def main():
                     await asyncio.sleep(RE_LOGIN_INTERVAL_SECONDS)
                 continue
 
+            # Made it past login and scrape, so reset the 401 retry budget.
+            login_401_retries = 0
+
             # High level connection info
             update_connection_metrics(connection_html)
             # Channel specific
@@ -118,6 +125,32 @@ async def main():
             # Bail and wait until next cycle.
             log.error("Caught NoAuthTokenError", error=e)
             break
+        except ModemUnauthorizedError as e:
+            # A 401 in the login request (cmconnectionstatus.html?login_<token>).
+            # Two causes look identical at first:
+            #   - wrong password: 401 every time.
+            #   - a "cold" modem: after a reboot OR >10 min since the last successful
+            #     login, it rejects the login even with correct credentials
+            #   See re_notes/auth.md. Retry to ride out the cold case, but cap it
+            #   so a persistent (bad-credentials) 401 surfaces. The counter
+            #   resets on a successful login.
+            if login_401_retries < LOGIN_401_MAX_RETRIES:
+                login_401_retries += 1
+                log.error(
+                    "Retrying login after (possibly spurious) 401",
+                    error=e,
+                    attempt=login_401_retries,
+                    max_attempts=LOGIN_401_MAX_RETRIES,
+                )
+                csrf_token = None
+                await asyncio.sleep(RE_LOGIN_INTERVAL_SECONDS)
+                continue
+            log.error(
+                "Login failed after retries; giving up",
+                error=e,
+                attempt=login_401_retries,
+            )
+            break
         except ModemNotOkError as e:
             # Got a non 200/OK back from the modem.
             # In testing, I could only ever get a non 200/OK from
@@ -129,6 +162,7 @@ async def main():
         except Exception as e:
             _e = "Unforeseen exception. Treating as non-fatal."
             log.error(_e, error=e)
+            await asyncio.sleep(METRICS_POLL_INTERVAL_SECONDS)
             continue
     await client.close()
 
