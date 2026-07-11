@@ -46,7 +46,7 @@ jobs:
       - name: Login to GitHub Container Registry
         id: login-ghcr
         # See: https://github.com/docker/login-action/releases
-        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           # See: https://docs.github.com/en/actions/publishing-packages/publishing-docker-images#publishing-images-to-github-packages
           registry: ghcr.io
