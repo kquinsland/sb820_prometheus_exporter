@@ -4,7 +4,9 @@ Implementation of the scrape and metric update functions
 
 import ssl
 from collections import OrderedDict
+from dataclasses import dataclass
 from datetime import timedelta
+from typing import TypeAlias, TypedDict
 
 import structlog
 from aiohttp import BasicAuth, ClientSession
@@ -31,6 +33,26 @@ legacy_ssl_context = ssl._create_unverified_context(
     check_hostname=False,
 )
 legacy_ssl_context.set_ciphers("AES128-GCM-SHA256")
+
+
+class MetricConfig(TypedDict, total=False):
+    metric: metrics.Gauge | metrics.Counter | metrics.Enum
+    flags: str | None
+    previous: dict[str, float]
+    values: dict[str, str] | None
+    default: str | None
+
+
+MetricsMap: TypeAlias = OrderedDict[str, MetricConfig | None]
+
+
+@dataclass
+class ChannelSnapshot:
+    """Validated channel values ready to publish as one snapshot."""
+
+    channel_ids: set[str]
+    numeric_values: list[tuple[MetricConfig, str, float]]
+    cumulative_values: dict[str, dict[str, int]]
 
 
 async def do_login(cs: ClientSession, login: str, password: str) -> str:
@@ -138,7 +160,7 @@ async def do_modem_scrape(
     )
 
 
-def update_connection_channel_metrics(bs: BeautifulSoup) -> None:
+def update_connection_channel_metrics(bs: BeautifulSoup) -> bool:
     """Attempts to update connection status related metrics from parsed HTML.
 
     Args:
@@ -150,48 +172,72 @@ def update_connection_channel_metrics(bs: BeautifulSoup) -> None:
     # Testing that a datetime could be parsed out at all is valuable, though.
     # It's worth the effort for the uptime though as that has a lot of diagnostic value.
     ##
+    datetime_ok = True
     try:
         parsed_time = parse.get_current_system_time(bs)
-    except ModemHtmlError as e:
-        # systime element missing -- an unexpected page/markup, worth surfacing.
-        log.warning("Could not parse modem system time; HTML may have changed", error=e)
-        metrics.c_meta_parse_result.labels("datetime", False).inc()
+    except ModemHtmlError as exc:
+        datetime_ok = False
+        log.warning(
+            "Could not parse modem system time; HTML may have changed", error=exc
+        )
     else:
         if parsed_time is None:
-            # Clock unset: the modem has no DOCSIS sync (outage). Benign/expected.
+            # An unset clock is a valid, expected part of a disconnected page.
             log.debug("Modem clock unset; no DOCSIS link")
-            metrics.c_meta_parse_result.labels("datetime", False).inc()
         else:
             log.debug("Modem has datetime of", dt=parsed_time)
-            metrics.c_meta_parse_result.labels("datetime", True).inc()
+    _record_parse_result("datetime", datetime_ok)
 
-    # Parse out the up/down stream channel data
-    log.debug("Attempting to parse downstream channel info from HTML...")
-    downstream_channels_data = parse.extract_downstream_channels(bs)
-
-    if downstream_channels_data is None:
-        metrics.c_meta_parse_result.labels("conn_downstream", False).inc()
-        return
-
-    log.info(
-        "Updating downstream channel metrics...", count=len(downstream_channels_data)
+    snapshots: dict[str, tuple[ChannelSnapshot, MetricsMap]] = {}
+    sections = (
+        (
+            "conn_downstream",
+            parse.extract_downstream_channels(bs),
+            metrics.DS_METRICS,
+        ),
+        ("conn_upstream", parse.extract_upstream_channels(bs), metrics.US_METRICS),
     )
-    metrics.c_meta_parse_result.labels("conn_downstream", True).inc()
-    _do_metrics_update(downstream_channels_data, metrics.DS_METRICS)
 
-    log.debug("Attempting to parse upstream channel info from HTML...")
-    upstream_channels_data = parse.extract_upstream_channels(bs)
+    for parse_target, channel_data, metrics_map in sections:
+        if channel_data is None:
+            log.error("Could not find channel table", parse_target=parse_target)
+            continue
 
-    if upstream_channels_data is None:
-        metrics.c_meta_parse_result.labels("conn_upstream", False).inc()
-        return
+        try:
+            snapshot = _parse_channel_snapshot(channel_data, metrics_map)
+        except ModemHtmlError as exc:
+            log.error(
+                "Could not validate channel table",
+                parse_target=parse_target,
+                error=exc,
+            )
+            continue
 
-    log.info("Updating upstream channel metrics...", count=len(upstream_channels_data))
-    metrics.c_meta_parse_result.labels("conn_upstream", True).inc()
-    _do_metrics_update(upstream_channels_data, metrics.US_METRICS)
+        snapshots[parse_target] = (snapshot, metrics_map)
+
+    expected_targets = {"conn_downstream", "conn_upstream"}
+    channels_ok = snapshots.keys() == expected_targets
+    if channels_ok:
+        # Both tables validated before either direction is mutated, preventing
+        # a malformed half-scrape from publishing a mixed old/new snapshot.
+        for parse_target in ("conn_downstream", "conn_upstream"):
+            snapshot, metrics_map = snapshots[parse_target]
+            log.info(
+                "Updating channel metrics",
+                parse_target=parse_target,
+                count=len(snapshot.channel_ids),
+            )
+            _apply_channel_snapshot(snapshot, metrics_map)
+
+    # A direction is only successful when the complete two-table snapshot was
+    # both validated and published. Record exactly one result per target/poll.
+    for parse_target in expected_targets:
+        _record_parse_result(parse_target, channels_ok)
+
+    return datetime_ok and channels_ok
 
 
-def update_modem_metrics(prod_info_html: BeautifulSoup) -> None:
+def update_modem_metrics(prod_info_html: BeautifulSoup) -> bool:
     """
     Most of what we get back from this request is strings that we can massage into Info() class metric.
     We can do this because the value is not expected to change often so we're not going to blow up
@@ -205,18 +251,17 @@ def update_modem_metrics(prod_info_html: BeautifulSoup) -> None:
     #   allows us to get the number of seconds which we can then pass to the gauge
     # E.G.: uptime will be parsed as something like '46 days 12h:55m:21s.00' -> 4.021×10^6 seconds
     ##
-    if not isinstance(_uptime, timedelta):
+    uptime_ok = isinstance(_uptime, timedelta)
+    if not uptime_ok:
         # In testing, most of the time, modem returns the full HTML and parsing uptime is easy.
         # But when the uptime is not present, the rest of the modem info also isn't present.
         # So if this fails, we can use it as a reliable proxy for the rest of the modem info.
-        metrics.c_meta_parse_result.labels("product_info", False).inc()
         log.error(
             "Failed to parse product_info/uptime as timedelta. Scrape issue?",
             uptime=_uptime,
         )
     else:
         metrics.g_modem_uptime_seconds.set(_uptime.total_seconds())
-        metrics.c_meta_parse_result.labels("product_info", True).inc()
 
     # As noted above, if we couldn't parse the uptime we probably couldn't parse the rest of the modem info
     # The uptime field is the only one that's not a string and we've already popped it.
@@ -231,8 +276,12 @@ def update_modem_metrics(prod_info_html: BeautifulSoup) -> None:
             "Can't update modem_info metric; no parsed data!", modem_info=modem_info
         )
 
+    product_info_ok = uptime_ok and len(modem_info) == 4
+    _record_parse_result("product_info", product_info_ok)
+    return product_info_ok
 
-def update_connection_metrics(connection_info_html: BeautifulSoup):
+
+def update_connection_metrics(connection_info_html: BeautifulSoup) -> bool:
     """
     This is not the "static" product info, this is high-level connection info.
     Things like DOCSIS version, provisioning file status ... etc.
@@ -243,204 +292,183 @@ def update_connection_metrics(connection_info_html: BeautifulSoup):
     ##
     # startup_info will be a dict where the keys come from the HTML and should match the keys in SU_METRICS
     startup_info = parse.extract_startup_procedure(connection_info_html)
+    expected_procedures = set(metrics.SU_METRICS)
+    missing_procedures = expected_procedures - startup_info.keys()
+    if missing_procedures:
+        log.error(
+            "Startup table is missing expected procedures",
+            missing=sorted(missing_procedures),
+        )
+        _record_parse_result("startup", False)
+        return False
 
-    # Drop stale series before repopulating (same reasoning as the channel gauges
-    #   in _do_metrics_update). These metrics are labeled by the volatile
-    #   "comment" text, so a state change (e.g. Operational -> Not Synchronized)
-    #   otherwise leaves the old comment's series frozen alongside the new one.
-    #   Guard on a non-empty parse so a failure doesn't wipe them with no refill.
-    if startup_info:
-        for _entry in metrics.SU_METRICS.values():
-            if _entry is not None and isinstance(
-                _entry["metric"], (metrics.Gauge, metrics.Enum)
-            ):
-                _entry["metric"].clear()
+    pending_gauges: list[tuple[metrics.Gauge, str, float]] = []
+    pending_enums: list[tuple[metrics.Enum, str, str]] = []
+    try:
+        for procedure, metric_data in metrics.SU_METRICS.items():
+            if metric_data is None:
+                continue
 
-    # The first column is called "procedure"
-    for procedure, data in startup_info.items():
-        if procedure not in metrics.SU_METRICS:
-            # TODO: increase a meta metric here; this is an indication that the HTML has changed
-            #   (firmware update?!), scraper needs to be updated
-            log.error(
-                "Parsed startup procedure has no matching metric.",
-                procedure=procedure,
-                data=data,
-            )
-            continue
-        # If the key points to None, we don't have a metric for it
-        if (metric_data := metrics.SU_METRICS[procedure]) is not None:
-            # TODO: instead of key into a dict, might make sense to just class MetricWrapper
-            #   to have a single class that can validate and has dedicated / standard properties
-            ##
-            # metric_data contains the metric _and_ the associated possible values (if Enum)
+            data = startup_info[procedure]
             metric = metric_data["metric"]
-            # Map between String and values the metric is expected to take
-            values_map = metric_data["values"]
-            # If we encounter a string that doesn't have a mapping, use this
-            _default = metric_data["default"]
-
+            comment = data["Comment"]
             if isinstance(metric, metrics.Gauge):
-                # TODO: catch cast errors
-                _v = data["Value"].split(" ")[0]
-                metric.labels(data["Comment"]).set(float(_v))
+                value = float(data["Value"].split(maxsplit=1)[0])
+                pending_gauges.append((metric, comment, value))
             elif isinstance(metric, metrics.Enum):
-                _v = values_map.get(data["Value"], _default)
-                _c = data["Comment"] if data["Comment"] != "" else None
-                metric.labels(_c).state(_v)
-        # Not catching any errors here, yet so we only increment the True state... for not
-        # TODO: obv, fix this ^
-        metrics.c_meta_parse_result.labels("startup", True).inc()
-
-
-# pylint: disable too-many-locals / R0914
-# pylint: disable too-many-branches / R0912
-def _do_metrics_update(
-    # Each row is list of parsed strings
-    ch_data: list[list[str]],
-    # Map from column name to metric and optional flags
-    metrics_map: OrderedDict[
-        str, dict[str, str | None | metrics.Gauge | metrics.Summary | metrics.Counter]
-    ],
-):
-    # See note in parse.py: it's not trivial to get the correct headers so we just index by position
-    #   and hope for the best!
-    # Need a copy of the column headers so we can figure out which column is the channel ID column.
-    _headers = list(metrics_map.keys())
-
-    if "Channel ID" not in _headers:
-        log.error("Could not find 'Channel ID' in headers", headers=_headers)
-        return
-    # We know know which column index is the channel ID.
-    ch_id_idx = _headers.index("Channel ID")
-
-    # Drop stale gauge series before repopulating: a gauge keyed by channel_id
-    #   (or lock_status / modulation) keeps its last value for any channel
-    #   absent from this scrape, because prometheus_client only touches label
-    #   sets you .set() again. During an outage the modem lists a single unsynced
-    #   channel (id 0), so every real channel would otherwise freeze at its
-    #   last-good value. Clearing makes absent channels drop out instead. Drop
-    #   only Gauges, not the Counters/Summaries, which accumulate over time.
-    for _entry in metrics_map.values():
-        if _entry is not None and isinstance(_entry["metric"], metrics.Gauge):
-            _entry["metric"].clear()
-
-    # If the length of the row matches the length of headers, we can assume that the row was parsed
-    #   without issue.
-    # Ignore the position in the row that corresponds to the channel ID and the rest of the data should map
-    #   to a specific metric.
-    #
-    # However some column's don't map directly to a specific metric. E.G: "Lock Status" is a column but we
-    #   don't want to publish the lock status of each channel/row.
-    # We want to publish the count of channels that is locked / not-locked as a gauge.
-    # This means that for some metrics we'll need a "flags" field which indicates if we should use the
-    #   simpler "set metric per channel_id/row" logic or if we need to do a cumulative sum across each
-    #   row and then set the metric after we've walked the full table.
-    ##
-    # As of now, we only support one type of "flagged" metric
-    _cumulative_sum_metrics = {}
-    _cumulative_sum_metric_values = {}
-
-    # Start by walking each row for sanity checking
-    for idx, row in enumerate(ch_data):
-        if len(row) != len(_headers):
-            log.error(
-                "Unexpected number of columns for row",
-                row_idx=idx,
-                expected_headers=_headers,
-                data=row,
-            )
-            continue
-        # Assuming check passes, each row should look like
-        #   DS: ['4', 'Locked', 'QAM256', '363000000 Hz', '6.2 dBmV', '40.5 dB', '0', '0']
-        #   US: ['1', '1', 'Locked', 'SC-QAM Upstream', '10400000 Hz', '3200000 Hz', '43.0 dBmV']
-        ##
-        # Extract the channel ID for the row; will need this for the simple "set per row" metrics
-        _ch_id = int(row[ch_id_idx])
-        log.debug("Processing row", row_idx=idx, channel_id=_ch_id)
-
-        # If we made it this far, we know that the row is as long as the number of columns in the parsed table.
-        # We can now walk across the row and process the value as appropriate
-        for col_idx, metric_dict in enumerate(metrics_map.values()):
-            # Any column that doesn't have a metric associated with it should be skipped
-            if metric_dict is None or metric_dict["metric"] is None:
-                continue
-            _metric = metric_dict["metric"]
-            # Likewise, the column that holds the channel ID should not be used as a metric
-            if col_idx == ch_id_idx:
-                continue
-
-            # We can now assume that the position in the row corresponds to a raw value.
-            # Before we can stuff that value into the metric, we need to clean it up so it can
-            #   be cast to the correct type.
-            # E.G.: a raw value of '363000000 Hz' needs to become just '363000000'
-            #   so we can later int() or float() it.
-            ##
-            # Harmless if there's no space
-            _tokens = row[col_idx].split(" ")
-            _value = _tokens[0]
-
-            # If this is not a simple "per-row" metric
-            if metric_dict["flags"] is not None:
-                # Store the metric by the column name
-                _column_name = _headers[col_idx]
-                if _column_name not in _cumulative_sum_metrics:
-                    _cumulative_sum_metrics[_column_name] = _metric
-                # And increase the count for the value
-                if _column_name not in _cumulative_sum_metric_values:
-                    _cumulative_sum_metric_values[_column_name] = {}
-
-                if _value not in _cumulative_sum_metric_values[_column_name]:
-                    _cumulative_sum_metric_values[_column_name][_value] = 1
-                else:
-                    _cumulative_sum_metric_values[_column_name][_value] += 1
-                continue
-
-            # Otherwise, this is a simple "per-row" metric
-            log.debug(
-                "Setting metric",
-                channel=_ch_id,
-                metric=_metric,
-                value=_value,
-                tokens=_tokens,
-            )
-            # the `metric` variable is a prometheus_client metric object and they all have different methods for setting values
-            #   some use set(), some use observe() ... etc
-            ##
-            try:
-                if isinstance(_metric, metrics.Gauge):
-                    _metric.labels(channel_id=_ch_id).set(float(_value))
-                elif isinstance(_metric, metrics.Summary):
-                    _metric.labels(channel_id=_ch_id).observe(float(_value))
-                elif isinstance(_metric, metrics.Counter):
-                    # Keys into enum are CAP
-                    _value = _value.upper()
-                    # Likewise, any - symbols should be replaced with _ as `-` isn't permitted in enum key
-                    _value = _value.replace("-", "_")
-                    # TODO: This probably shouldn't be a counter; should be a gauge since we don't want to constantly increment
-                    #   e.g.: if we have 32 channels locked, after 10 scrapes metric will be 320 which is not useful
-                    # This means that we'll now have to re-factor this slightly as we can't just rely on metric type; not all Gauge will just get a .set()
-                    #   call; some will need us to to counting _first_ and then set the value.
-                    _metric.labels(_value).inc()
-            # Catch cast errors
-            except ValueError as ve:
-                # TODO: meta metric increase here :D
-                log.error(
-                    "Failure to convert raw value into correct value for metric.",
-                    row_idx=idx,
-                    col_idx=col_idx,
-                    metric=_metric,
-                    _tokens=_tokens,
-                    _value=_value,
-                    error=ve,
+                values_map = metric_data["values"]
+                if values_map is None:
+                    raise ModemHtmlError(
+                        f"Startup Enum {procedure!r} has no value mapping"
+                    )
+                value = values_map.get(data["Value"], metric_data["default"])
+                if value is None:
+                    raise ModemHtmlError(
+                        f"Startup Enum {procedure!r} has no default state"
+                    )
+                pending_enums.append((metric, comment, value))
+            else:
+                raise ModemHtmlError(
+                    f"Unsupported startup metric for procedure {procedure!r}"
                 )
+    except (AttributeError, ModemHtmlError, TypeError, ValueError) as exc:
+        log.error("Could not validate startup table", error=exc)
+        _record_parse_result("startup", False)
+        return False
+
+    # Validation is complete, so replacing volatile comment-labelled children
+    # cannot leave a half-parsed snapshot behind.
+    for metric_data in metrics.SU_METRICS.values():
+        if metric_data is not None:
+            metric_data["metric"].clear()
+
+    for metric, comment, value in pending_gauges:
+        metric.labels(comment).set(value)
+    for metric, comment, value in pending_enums:
+        metric.labels(comment).state(value)
+
+    _record_parse_result("startup", True)
+    return True
+
+
+def _record_parse_result(parse_target: str, success: bool) -> None:
+    metrics.c_meta_parse_result.labels(parse_target, success).inc()
+
+
+def _parse_channel_snapshot(
+    ch_data: list[list[str]], metrics_map: MetricsMap
+) -> ChannelSnapshot:
+    """Validate and normalize a channel table without mutating metrics."""
+    headers = list(metrics_map)
+    if "Channel ID" not in headers:
+        raise ModemHtmlError("Channel metric map has no 'Channel ID' column")
+
+    channel_id_index = headers.index("Channel ID")
+    channel_ids: set[str] = set()
+    numeric_values: list[tuple[MetricConfig, str, float]] = []
+    cumulative_values: dict[str, dict[str, int]] = {}
+
+    for row_index, row in enumerate(ch_data):
+        if len(row) != len(headers):
+            raise ModemHtmlError(
+                f"Row {row_index} has {len(row)} columns; expected {len(headers)}"
+            )
+
+        try:
+            channel_id = str(int(row[channel_id_index]))
+        except ValueError as exc:
+            raise ModemHtmlError(
+                f"Row {row_index} has invalid channel ID {row[channel_id_index]!r}"
+            ) from exc
+
+        if channel_id in channel_ids:
+            raise ModemHtmlError(f"Duplicate channel ID {channel_id!r}")
+        channel_ids.add(channel_id)
+
+        for column_index, metric_config in enumerate(metrics_map.values()):
+            if metric_config is None or column_index == channel_id_index:
                 continue
-    # We have processed all rows and the per-row metrics.
-    # If any cumulative metrics, we need to address them now.
-    ##
-    log.debug("Processing cumulative metrics", count=len(_cumulative_sum_metrics))
-    # Walk the cumulative metrics
-    for column_name, metric in _cumulative_sum_metrics.items():
-        log.debug("Cumulative process", column=column_name, metric=metric)
-        # Walk the unique value, count pairs for each metric
-        for value_str, value_ct in _cumulative_sum_metric_values[column_name].items():
-            metric.labels(value_str).set(float(value_ct))
+
+            raw_value = row[column_index].strip()
+            if metric_config["flags"] is not None:
+                if not raw_value:
+                    raise ModemHtmlError(
+                        f"Row {row_index}, column {headers[column_index]!r} is empty"
+                    )
+                counts = cumulative_values.setdefault(headers[column_index], {})
+                counts[raw_value] = counts.get(raw_value, 0) + 1
+                continue
+
+            try:
+                value = float(raw_value.split(maxsplit=1)[0])
+            except (IndexError, ValueError) as exc:
+                raise ModemHtmlError(
+                    f"Row {row_index}, column {headers[column_index]!r} "
+                    f"has invalid numeric value {raw_value!r}"
+                ) from exc
+            if isinstance(metric_config["metric"], metrics.Counter) and value < 0:
+                raise ModemHtmlError(
+                    f"Row {row_index}, column {headers[column_index]!r} "
+                    f"has negative counter value {value}"
+                )
+            numeric_values.append((metric_config, channel_id, value))
+
+    return ChannelSnapshot(channel_ids, numeric_values, cumulative_values)
+
+
+def _apply_channel_snapshot(snapshot: ChannelSnapshot, metrics_map: MetricsMap) -> None:
+    """Replace the exported channel snapshot after validation has succeeded."""
+    gauge_metrics = {
+        metric_config["metric"]
+        for metric_config in metrics_map.values()
+        if metric_config is not None
+        and isinstance(metric_config["metric"], metrics.Gauge)
+    }
+    for metric in gauge_metrics:
+        metric.clear()
+
+    for metric_config in metrics_map.values():
+        if metric_config is None or not isinstance(
+            metric_config["metric"], metrics.Counter
+        ):
+            continue
+        previous_values = metric_config.setdefault("previous", {})
+        for channel_id in set(previous_values) - snapshot.channel_ids:
+            metric_config["metric"].remove(channel_id)
+            del previous_values[channel_id]
+
+    for metric_config, channel_id, current_value in snapshot.numeric_values:
+        metric = metric_config["metric"]
+        if isinstance(metric, metrics.Gauge):
+            metric.labels(channel_id=channel_id).set(current_value)
+            continue
+
+        if not isinstance(metric, metrics.Counter):
+            raise TypeError(f"Unsupported channel metric type: {type(metric)!r}")
+
+        previous_values = metric_config.setdefault("previous", {})
+        previous_value = previous_values.get(channel_id)
+        # The modem exposes an absolute total that resets when it reboots. Turn
+        # that into a process-monotonic Prometheus Counter by adding deltas, or
+        # the new raw value when a reset is detected.
+        if previous_value is None or current_value < previous_value:
+            increment = current_value
+        else:
+            increment = current_value - previous_value
+        metric.labels(channel_id=channel_id).inc(increment)
+        previous_values[channel_id] = current_value
+
+    for column_name, counts in snapshot.cumulative_values.items():
+        metric_config = metrics_map[column_name]
+        if metric_config is None or not isinstance(
+            metric_config["metric"], metrics.Gauge
+        ):
+            raise TypeError(f"Cumulative column {column_name!r} is not a Gauge")
+        for value, count in counts.items():
+            metric_config["metric"].labels(value).set(count)
+
+
+def _do_metrics_update(ch_data: list[list[str]], metrics_map: MetricsMap) -> None:
+    """Compatibility wrapper for callers that update one validated table."""
+    snapshot = _parse_channel_snapshot(ch_data, metrics_map)
+    _apply_channel_snapshot(snapshot, metrics_map)
