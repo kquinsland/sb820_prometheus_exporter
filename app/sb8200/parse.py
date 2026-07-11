@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timedelta
 
 import structlog
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from err.exceptions import ModemHtmlError
 
 log = structlog.get_logger(__name__)
@@ -16,7 +16,8 @@ log = structlog.get_logger(__name__)
 
 def is_login_page(soup: BeautifulSoup) -> bool:
     """Check if the page is the login page"""
-    return soup.find("title").text.strip() == "Login"
+    title = soup.find("title")
+    return title is not None and title.text.strip() == "Login"
 
 
 def get_modem_info(soup: BeautifulSoup) -> dict[str, None | str | timedelta]:
@@ -28,12 +29,12 @@ def get_modem_info(soup: BeautifulSoup) -> dict[str, None | str | timedelta]:
     - Up Time: nice to graph over time to see if/when the modem has been rebooted.
     """
 
-    _modem_info = {
-        "docsis_version": None | str,
-        "software_version": None | str,
-        "mac_address": None | str,
-        "serial_number": None | str,
-        "up_time": None | timedelta,
+    _modem_info: dict[str, None | str | timedelta] = {
+        "docsis_version": None,
+        "software_version": None,
+        "mac_address": None,
+        "serial_number": None,
+        "up_time": None,
     }
     # Since we're scraping HTML, we have to be careful about the structure of the page and check that the various find() calls
     #   return something before trying to access the .text attribute
@@ -90,10 +91,19 @@ def get_current_system_time(soup: BeautifulSoup) -> datetime | None:
         raise ModemHtmlError("Could not find the system-time element (#systime)")
 
     # The format is "Day Mon dd hh:mm:ss yyyy"
-    datetime_str = system_time_row.text.strip().split(":", 1)[1].strip()
+    try:
+        datetime_str = system_time_row.text.strip().split(":", 1)[1].strip()
+    except IndexError as exc:
+        raise ModemHtmlError("Malformed modem system-time element") from exc
+
     if datetime_str == "--- --- -- --:--:-- ----":
         return None
-    return datetime.strptime(datetime_str, "%a %b %d %H:%M:%S %Y")
+    try:
+        return datetime.strptime(datetime_str, "%a %b %d %H:%M:%S %Y")
+    except ValueError as exc:
+        raise ModemHtmlError(
+            f"Unexpected modem system-time value: {datetime_str!r}"
+        ) from exc
 
 
 def extract_startup_procedure(soup: BeautifulSoup) -> dict[str, dict[str, str]]:
@@ -101,6 +111,8 @@ def extract_startup_procedure(soup: BeautifulSoup) -> dict[str, dict[str, str]]:
     # Find the table with the "Startup Procedure" header
     tables = soup.find_all("table", class_="simpleTable")
     for table in tables:
+        if not isinstance(table, Tag):
+            continue
         headers = table.find_all("th")
         # Check if one of the headers contains the text "Startup Procedure"
         if any("Startup Procedure" in header.text for header in headers):
@@ -108,6 +120,8 @@ def extract_startup_procedure(soup: BeautifulSoup) -> dict[str, dict[str, str]]:
             # Extract the key, value, and comment for specified rows
             startup_procedure_data = {}
             for row in rows:
+                if not isinstance(row, Tag):
+                    continue
                 cols = row.find_all("td")
                 if len(cols) == 3:  # Ensure row has key, value, and comment
                     key = cols[0].text.strip()
@@ -163,6 +177,8 @@ def _extract_table_rows(
     tables = soup.find_all("table", class_="simpleTable")
     log.debug("Tables", title=table_section_title, count=len(tables))
     for table in tables:
+        if not isinstance(table, Tag):
+            continue
         # Check if the current table contains the section title
         if table.find("th", string=table_section_title):
             rows = table.find_all("tr")
@@ -170,6 +186,8 @@ def _extract_table_rows(
             data_rows = []
             # See note above about the weird HTML structure, we skip the first row
             for row in rows[1:]:
+                if not isinstance(row, Tag):
+                    continue
                 cols = row.find_all("td")
                 row_data = [col.text.strip() for col in cols]
                 data_rows.append(row_data)

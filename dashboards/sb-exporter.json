@@ -322,7 +322,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sb8200_downstream_channel_lock_status_count{lock_status=\"Locked\", instance=\"$exporter_instance\"} / sb8200_downstream_channel_lock_status_count{instance=\"$exporter_instance\"}",
+          "expr": "(sum(sb8200_downstream_channel_lock_status_count{lock_status=\"Locked\", instance=\"$exporter_instance\"}) or vector(0)) / clamp_min((sum(sb8200_downstream_channel_lock_status_count{instance=\"$exporter_instance\"}) or vector(0)), 1)",
           "interval": "",
           "legendFormat": "",
           "range": true,
@@ -621,7 +621,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sb8200_upstream_channel_lock_count{lock_status=\"Locked\", instance=\"$exporter_instance\"}  / sb8200_upstream_channel_lock_count{instance=\"$exporter_instance\"}",
+          "expr": "(sum(sb8200_upstream_channel_lock_count{lock_status=\"Locked\", instance=\"$exporter_instance\"}) or vector(0)) / clamp_min((sum(sb8200_upstream_channel_lock_count{instance=\"$exporter_instance\"}) or vector(0)), 1)",
           "interval": "",
           "legendFormat": "",
           "range": true,
@@ -1196,7 +1196,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "  rate(sb8200_downstream_corrected_sum{instance=~\"$exporter_instance\"}[5m])\n/\n  (\n        rate(sb8200_downstream_uncorrectable_sum{instance=~\"$exporter_instance\"}[5m])\n      +\n        rate(sb8200_downstream_corrected_sum{instance=~\"$exporter_instance\"}[5m])\n  )",
+          "expr": "  rate(sb8200_downstream_corrected_total{instance=~\"$exporter_instance\"}[5m])\n/\n  clamp_min(\n        rate(sb8200_downstream_uncorrectable_total{instance=~\"$exporter_instance\"}[5m])\n      +\n        rate(sb8200_downstream_corrected_total{instance=~\"$exporter_instance\"}[5m]),\n      0.000000001\n  )",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 2,
@@ -1299,7 +1299,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "  rate(sb8200_downstream_uncorrectable_sum{instance=~\"$exporter_instance\"}[5m])\n/\n  (\n        rate(sb8200_downstream_uncorrectable_sum{instance=~\"$exporter_instance\"}[5m])\n      +\n        rate(sb8200_downstream_corrected_sum{instance=~\"$exporter_instance\"}[5m])\n  )",
+          "expr": "  rate(sb8200_downstream_uncorrectable_total{instance=~\"$exporter_instance\"}[5m])\n/\n  clamp_min(\n        rate(sb8200_downstream_uncorrectable_total{instance=~\"$exporter_instance\"}[5m])\n      +\n        rate(sb8200_downstream_corrected_total{instance=~\"$exporter_instance\"}[5m]),\n      0.000000001\n  )",
           "interval": "",
           "intervalFactor": 2,
           "legendFormat": "Ch. {{ channel_id }}",
@@ -1307,7 +1307,7 @@
           "refId": "A"
         }
       ],
-      "title": "Uncorrectable Codewords per Second",
+      "title": "% Uncorrectable Codewords per Second",
       "type": "timeseries"
     },
     {
@@ -2148,10 +2148,10 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "meta_scrape_result_total{http_code=\"200\",instance=~\"$exporter_instance\"} / meta_scrape_result_total",
+          "expr": "meta_scrape_success{instance=~\"$exporter_instance\"}",
           "instant": false,
           "interval": "",
-          "legendFormat": "{{ scrape_target }}",
+          "legendFormat": "overall",
           "range": true,
           "refId": "A"
         }

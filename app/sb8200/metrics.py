@@ -80,6 +80,18 @@ c_meta_parse_result = Counter(
     labelnames=["parse_target", "parse_result"],
 )
 
+# A scrape can receive HTTP 200 responses but still fail to parse or publish a
+# complete snapshot. Keep an explicit current result so callers can distinguish
+# a valid disconnected modem page from stale data left by a failed poll.
+g_meta_scrape_success = Gauge(
+    f"{META_NS}_scrape_success",
+    "Whether the most recent modem poll completed and parsed successfully.",
+)
+g_meta_last_success_unixtime = Gauge(
+    f"{META_NS}_last_success_unixtime",
+    "Unix timestamp of the most recent successful modem poll.",
+)
+
 ##
 # General hardware info / metrics
 ##
@@ -242,20 +254,28 @@ g_downstream_snr_db = Gauge(
 DS_METRICS["SNR/MER"] = {"metric": g_downstream_snr_db, "flags": None}
 
 
-s_downstream_corrected = Summary(
+c_downstream_corrected = Counter(
     f"{METRICS_NS}_downstream_corrected",
-    "Count of corrected errors on the channel.",
+    "Total corrected codewords observed on the channel.",
     labelnames=["channel_id"],
 )
-DS_METRICS["Corrected"] = {"metric": s_downstream_corrected, "flags": None}
+DS_METRICS["Corrected"] = {
+    "metric": c_downstream_corrected,
+    "flags": None,
+    "previous": {},
+}
 
 
-s_downstream_uncorrectable = Summary(
+c_downstream_uncorrectable = Counter(
     f"{METRICS_NS}_downstream_uncorrectable",
-    "Count of uncorrectable errors on the channel.",
+    "Total uncorrectable codewords observed on the channel.",
     labelnames=["channel_id"],
 )
-DS_METRICS["Uncorrectables"] = {"metric": s_downstream_uncorrectable, "flags": None}
+DS_METRICS["Uncorrectables"] = {
+    "metric": c_downstream_uncorrectable,
+    "flags": None,
+    "previous": {},
+}
 
 ##
 # Upstream metrics
