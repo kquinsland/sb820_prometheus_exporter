@@ -24,14 +24,10 @@ log = structlog.get_logger(__name__)
 CONN_STATUS_ENDPOINT = "/cmconnectionstatus.html"
 PROD_INFO_ENDPOINT = "/cmswinfo.html"
 
-# Modem uses very old TLS so we need to bend over backwards to pretend it's 2010
-##
-# pylint: disable = protected-access / W0212
-legacy_ssl_context = ssl._create_unverified_context(
-    protocol=ssl.PROTOCOL_SSLv23,
-    purpose=ssl.Purpose.SERVER_AUTH,
-    check_hostname=False,
-)
+# The modem uses a self-signed certificate and a limited cipher set.
+legacy_ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+legacy_ssl_context.check_hostname = False
+legacy_ssl_context.verify_mode = ssl.CERT_NONE
 legacy_ssl_context.set_ciphers("AES128-GCM-SHA256")
 
 

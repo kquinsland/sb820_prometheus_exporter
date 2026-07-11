@@ -7,13 +7,20 @@ on:
     # Allow calling from other GHA workflows.
     # See: https://docs.github.com/en/actions/sharing-automations/reusing-workflows#creating-a-reusable-workflow
     workflow_call:
-    # As soon as an open PR has modified python files, run the checks.
+    # As soon as an open PR has modified Python or its build metadata, run the checks.
     # This flow will re-run the checks if new commits are added to the PR.
     pull_request:
         paths:
             - "**.py"
+            - ".github/workflows/ci_python_lint_and_test.yaml"
+            - "Dockerfile"
+            - "pyproject.toml"
+            - "uv.lock"
 # Start with no permissions, then allow per job/action
 permissions: {}
+
+env:
+    PYTHON_VERSION: "3.14"
 
 jobs:
     lint-format:
@@ -40,7 +47,7 @@ jobs:
 
             - name: Set up Python
               id: setup-python
-              run: uv python install
+              run: uv python install "$PYTHON_VERSION"
 
             - name: Check for lint violations
               id: check-lint-rules
@@ -86,12 +93,12 @@ jobs:
 
             - name: Set up Python
               id: setup-python
-              run: uv python install
+              run: uv python install "$PYTHON_VERSION"
 
             - name: Install the project
               id: install-dependencies
-              run: uv sync --all-extras --dev
+              run: uv sync --locked --python "$PYTHON_VERSION" --all-extras --dev
 
             - name: Run tests
               id: run-tests
-              run: uv run pytest
+              run: uv run --locked --python "$PYTHON_VERSION" pytest

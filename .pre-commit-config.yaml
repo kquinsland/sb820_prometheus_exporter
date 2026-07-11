@@ -13,6 +13,8 @@ repos:
           .*\.secret$
           )$
       - id: check-yaml
+        # Kubernetes manifests commonly contain several resources separated by `---`.
+        args: [--allow-multiple-documents]
       - id: check-json
         exclude: |
           (?x)^(
@@ -25,9 +27,9 @@ repos:
           )$
         args:
           - --autofix
-          # Note: this hook does not honor the .editorconfig value so
-          #   they need to be kept in sync manually
-          - --indent=4
+          # Grafana exports dashboards with two-space indentation. Match that native
+          # format (and .editorconfig) to avoid whole-file diffs after an export.
+          - --indent=2
           # Do not convert extended unicode characters to escape sequences
           # e.g. 🤖 -> \ud83e\udd16
           - --no-ensure-ascii
