@@ -8,7 +8,7 @@
 # Allow override via build-arg
 ##
 ARG BASE_IMAGE=alpine:latest
-ARG PYTHON_VERSION="3.13"
+ARG PYTHON_VERSION="3.14"
 
 ## Build / prep
 FROM ${BASE_IMAGE} AS build

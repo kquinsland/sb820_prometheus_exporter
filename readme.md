@@ -67,5 +67,5 @@ Example manifest and deployment instructions are in [`infra/k8s`](infra/k8s/read
 
 ## Development
 
-Standard python / `uv` project.
+Standard Python 3.14 / `uv` project.
 To help with dashboard development, there is a [`docker-compose`](dashboards/docker-compose.yaml) file that will start a local instance of prometheus, grafana and the exporter.
