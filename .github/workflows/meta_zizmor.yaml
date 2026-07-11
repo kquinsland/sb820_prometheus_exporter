@@ -28,12 +28,12 @@ jobs:
             actions: read
         steps:
             - name: Checkout repository
-              uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
               with:
                   persist-credentials: false
 
             - name: Run zizmor 🌈
-              uses: zizmorcore/zizmor-action@5ca5fc7a4779c5263a3ffa0e1f693009994446d1 # v0.1.2
+              uses: zizmorcore/zizmor-action@192e21d79ab29983730a13d1382995c2307fbcaa # v0.5.7
               with:
                   # Code scanning and other stuff is only available on free/public OR private/org repos
                   # Can't enable on private/personal repos
