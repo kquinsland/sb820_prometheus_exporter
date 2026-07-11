@@ -1,56 +1,56 @@
 {
   "__inputs": [
     {
-      "name": "DS_PROMETHEUS",
-      "label": "Prometheus",
       "description": "",
-      "type": "datasource",
+      "label": "Prometheus",
+      "name": "DS_PROMETHEUS",
       "pluginId": "prometheus",
-      "pluginName": "Prometheus"
+      "pluginName": "Prometheus",
+      "type": "datasource"
     },
     {
+      "description": "",
+      "label": "port",
       "name": "VAR_PORT",
       "type": "constant",
-      "label": "port",
-      "value": "9705",
-      "description": ""
+      "value": "9705"
     }
   ],
   "__requires": [
     {
-      "type": "panel",
       "id": "gauge",
       "name": "Gauge",
+      "type": "panel",
       "version": ""
     },
     {
-      "type": "grafana",
       "id": "grafana",
       "name": "Grafana",
+      "type": "grafana",
       "version": "6.7.2"
     },
     {
-      "type": "panel",
       "id": "graph",
       "name": "Graph",
+      "type": "panel",
       "version": ""
     },
     {
-      "type": "datasource",
       "id": "prometheus",
       "name": "Prometheus",
+      "type": "datasource",
       "version": "1.0.0"
     },
     {
-      "type": "panel",
       "id": "singlestat",
       "name": "Singlestat",
+      "type": "panel",
       "version": ""
     },
     {
-      "type": "panel",
       "id": "stat",
       "name": "Stat",
+      "type": "panel",
       "version": ""
     }
   ],
@@ -2320,16 +2320,16 @@
       },
       {
         "current": {
-          "value": "${VAR_PORT}",
-          "text": "${VAR_PORT}"
+          "text": "${VAR_PORT}",
+          "value": "${VAR_PORT}"
         },
         "hide": 2,
         "label": null,
         "name": "port",
         "options": [
           {
-            "value": "${VAR_PORT}",
-            "text": "${VAR_PORT}"
+            "text": "${VAR_PORT}",
+            "value": "${VAR_PORT}"
           }
         ],
         "query": "${VAR_PORT}",
