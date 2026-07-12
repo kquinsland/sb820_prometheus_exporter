@@ -45,7 +45,7 @@ ty = "0.0.57"
 kube-linter = "0.8.3"
 kube-score = "1.20.0"
 kubeconform = "0.8.0"
-pluto = "5.24.0"
+pluto = "5.24.1"
 
 # Docs
 "pipx:kubediagrams" = "0.8.0"
