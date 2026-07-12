@@ -54,5 +54,5 @@ bun = "1.3.14"
 markdownlint-cli2 = "0.23.0"
 
 # General house keeping
-prek = "0.4.8"
+prek = "0.4.9"
 pinact = "4.1.0"
