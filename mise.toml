@@ -51,7 +51,7 @@ pluto = "5.24.1"
 "pipx:kubediagrams" = "0.8.0"
 # For NPM and markdown lint2
 bun = "1.3.14"
-markdownlint-cli2 = "0.23.0"
+markdownlint-cli2 = "0.23.1"
 
 # General house keeping
 prek = "0.4.9"
