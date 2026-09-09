@@ -33,7 +33,7 @@ jobs:
                   persist-credentials: false
 
             - name: Run zizmor 🌈
-              uses: zizmorcore/zizmor-action@192e21d79ab29983730a13d1382995c2307fbcaa # v0.5.7
+              uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
               with:
                   # Code scanning and other stuff is only available on free/public OR private/org repos
                   # Can't enable on private/personal repos
