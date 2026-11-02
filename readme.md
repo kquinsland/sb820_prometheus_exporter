@@ -15,17 +15,24 @@ It's simple and meant to be deployed in a k8s cluster but can be run locally; al
 
 ## Configuration
 
-| Environment variable | Default | Purpose |
-| --- | --- | --- |
-| `MODEM_BASE_URL` | `https://192.168.100.1` | Modem management URL. |
-| `MODEM_USERNAME` | `admin` | Modem login name. |
-| `MODEM_PASSWORD` | None; required | Modem password. |
-| `METRICS_PORT` | `8200` | Prometheus exporter listen port. |
-| `METRICS_POLL_INTERVAL_SECONDS` | `60` | Delay between regular modem polls and slow retries. |
-| `RE_LOGIN_INTERVAL_SECONDS` | `5` | Delay between fast retries of the modem's transient login 401. |
-| `LOGIN_401_MAX_RETRIES` | `2` | Number of fast 401 retries before falling back to the regular poll interval. |
-| `MODEM_REQUEST_TIMEOUT_SECONDS` | `30` | Total timeout for each modem HTTP request. |
-| `LOG_LEVEL` | `INFO` | Python log level name. |
+| Environment variable            | Default                 | Purpose                                                                      |
+| ------------------------------- | ----------------------- | ---------------------------------------------------------------------------- |
+| `MODEM_BASE_URL`                | `https://192.168.100.1` | Modem management URL.                                                        |
+| `MODEM_USERNAME`                | `admin`                 | Modem login name.                                                            |
+| `MODEM_PASSWORD`                | None; required          | Modem password.                                                              |
+| `METRICS_PORT`                  | `8200`                  | Prometheus exporter listen port.                                             |
+| `METRICS_HOST`                  | `0.0.0.0`               | Metrics bind address. Use `::` for IPv6 or `::1` for IPv6 loopback.          |
+| `METRICS_POLL_INTERVAL_SECONDS` | `60`                    | Delay between regular modem polls and slow retries.                          |
+| `RE_LOGIN_INTERVAL_SECONDS`     | `5`                     | Delay between fast retries of the modem's transient login 401.               |
+| `LOGIN_401_MAX_RETRIES`         | `2`                     | Number of fast 401 retries before falling back to the regular poll interval. |
+| `MODEM_REQUEST_TIMEOUT_SECONDS` | `30`                    | Total timeout for each modem HTTP request.                                   |
+| `LOG_LEVEL`                     | `INFO`                  | Python log level name.                                                       |
+
+Set `METRICS_HOST=::` for an IPv6 deployment.
+On systems configured to accept IPv4-mapped connections, this also serves IPv4; dual-stack behavior depends on the host's IPv6 socket settings.
+Use an unbracketed address for `METRICS_HOST` and brackets in URLs, for example `http://[::1]:8200/metrics`.
+
+At present, `DOCSIS 3.1 Operations Support System Interface Specification (CM-SP-OSSIv3.1) - Section 7.2.1 (Cable Modem Management Requirements)` does not explicitly cover what a modem is supposed to do for IPv6 management IPs but if that ever does change something like `MODEM_BASE_URL=https://[2001:db8::1]` should work.
 
 ## Dashboard
 

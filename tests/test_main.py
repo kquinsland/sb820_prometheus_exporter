@@ -1,6 +1,8 @@
 """Polling-loop behavior for transient modem and parse failures."""
 
 import asyncio
+import socket
+from urllib.request import ProxyHandler, build_opener
 
 import pytest
 from bs4 import BeautifulSoup
@@ -8,6 +10,50 @@ from err.exceptions import ModemNotOkError, ModemUnauthorizedError
 from prometheus_client import REGISTRY
 
 import app.main as exporter_main
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "::1"])
+def test_main_serves_metrics_on_configured_address(monkeypatch, host):
+    """Exercise main's wiring and a real HTTP request for both address families."""
+    if host == "::1":
+        try:
+            with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as probe:
+                probe.bind((host, 0))
+        except OSError:
+            pytest.skip("IPv6 loopback is unavailable")
+
+    started = []
+    start_server = exporter_main.start_http_server
+
+    def capture_server(**kwargs):
+        result = start_server(**kwargs)
+        started.append(result)
+        return result
+
+    async def check_metrics(*_args):
+        server, _ = started[0]
+        assert server.server_address[0] == host
+        port = server.server_address[1]
+        authority = f"[{host}]" if ":" in host else host
+        # Loopback traffic must not go through a configured HTTP proxy.
+        with build_opener(ProxyHandler({})).open(
+            f"http://{authority}:{port}/metrics", timeout=5
+        ) as response:
+            assert response.status == 200
+            assert b"meta_scrape_success" in response.read()
+
+    monkeypatch.setattr(exporter_main, "METRICS_HOST", host)
+    monkeypatch.setattr(exporter_main, "METRICS_PORT", 0)
+    monkeypatch.setattr(exporter_main, "MODEM_PASSWORD", "test-password")
+    monkeypatch.setattr(exporter_main, "start_http_server", capture_server)
+    monkeypatch.setattr(exporter_main, "poll_modem", check_metrics)
+    try:
+        asyncio.run(exporter_main.main())
+    finally:
+        for server, thread in started:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
 
 
 class StopPolling(BaseException):
