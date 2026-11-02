@@ -20,8 +20,17 @@ spec:
           # For now, there is only one tag: `main`. To prevent stale images, always check
           #   if the hashes local are the most current.
           imagePullPolicy: Always
-          # TODO: this can probably drop all privileges and run as a non-root user
-          securityContext: {}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
 
           # As the pod only has ONE http page to offer, can consider the pod to be alive and ready
           #   once the /metrics page is returning 200/OK.

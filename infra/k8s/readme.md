@@ -21,3 +21,6 @@ scrapeconfig.monitoring.coreos.com/sb-exporter configured
 ```
 
 The namespace, service name, deployment name ... etc are all representative of my environment and may need to be adjusted to suit yours.
+
+The container runs as UID/GID `10001`, matching the image's application user.
+The deployment requires non-root execution, disables privilege escalation, drops all Linux capabilities, uses a read-only root filesystem, and applies the runtime's default seccomp profile.

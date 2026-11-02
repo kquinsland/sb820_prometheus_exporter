@@ -1,5 +1,5 @@
 import logging
-from enum import Enum
+from enum import Enum, StrEnum
 
 # Unlikely that the modem cares but it's easy enough to pretend to be a browser just in case
 REQUEST_HEADERS = {
@@ -26,3 +26,17 @@ class LogLevel(Enum):
     WARNING = logging.WARNING
     ERROR = logging.ERROR
     CRITICAL = logging.CRITICAL
+
+
+class SecurityState(StrEnum):
+    """Published DOCSIS security states."""
+
+    ENABLED = "enabled"
+    NOT_ENABLED = "not_enabled"
+
+
+class NetworkAccessState(StrEnum):
+    """Published DOCSIS network authorization states."""
+
+    ALLOWED = "allowed"
+    NOT_ALLOWED = "not_allowed"
