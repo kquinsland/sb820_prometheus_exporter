@@ -1,6 +1,6 @@
 [project]
 name = "sb-exporter"
-version = "0.1.0"
+version = "1.0.2"
 description = ""
 authors = [{ name = "Karl Quinsland" }]
 requires-python = "<4.0,>=3.15"

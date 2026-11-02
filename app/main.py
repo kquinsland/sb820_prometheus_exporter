@@ -24,6 +24,7 @@ from sb8200.scrape import (
     update_modem_metrics,
 )
 from util.const import REQUEST_HEADERS, LogLevel
+from util.version import __version__
 
 # cfg-file/arg-arse/clip is overkill for the few things that need to be configured.
 # k8s makes it trivial to define env-vars so we'll just use that.
@@ -171,7 +172,7 @@ async def poll_modem(
 
 async def main() -> None:
     """Main entry point."""
-    log.info("Starting up")
+    log.info("Starting up", version=__version__)
     modem_username = MODEM_USERNAME
     modem_password = MODEM_PASSWORD
     if modem_username is None or modem_password is None:

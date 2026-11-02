@@ -12,6 +12,7 @@ It's simple and meant to be deployed in a k8s cluster but can be run locally; al
   - [TODOs](#todos)
   - [Deployment](#deployment)
   - [Development](#development)
+  - [Releases](#releases)
 
 ## Configuration
 
@@ -90,3 +91,26 @@ mise run docs:diagram
 The diagram task runs the pinned KubeDiagrams image with Docker, falling back to Podman when Docker is unavailable; set `CONTAINER_RUNTIME` to override it.
 Python and Graphviz for diagram generation stay inside the container.
 The generated diagram is `infra/k8s/deployment.png`.
+
+## Releases
+
+[Release Please](https://github.com/googleapis/release-please-action) maintains a release PR after changes land on `main`.
+Use Conventional Commits in merge/squash commit messages: `fix:` produces a patch release, `feat:` a minor release, and `feat!:` or a `BREAKING CHANGE:` footer a major release.
+The old Release Drafter labels no longer control version bumps or automatically label PRs.
+
+The release PR updates `pyproject.toml`, the `sb-exporter` entry in `uv.lock`, `app/util/version.py`, `.release-please-manifest.json`, and `CHANGELOG.md` together.
+The Python strategy discovers `version.py` automatically; the lockfile uses a package-name selector so dependency versions stay unchanged.
+The selector uses `name.value` because the pinned release-please TOML parser wraps scalar values with position metadata.
+The runtime version is included in the startup log and copied into the container with the application source.
+Tests check that project metadata, lockfile, manifest, and runtime versions agree.
+The migration baseline is the existing `v1.0.2` release; older notes remain in [GitHub Releases](https://github.com/kquinsland/sb820_prometheus_exporter/releases).
+
+Make the organization secret `RELEASE_PLEASE_TOKEN` available to this repository before enabling the workflow.
+For a fine-grained PAT, grant this repository Contents, Pull requests, and Issues read/write access, and ensure the token owner can create PRs and releases.
+The workflow deliberately requires this token: the built-in `GITHUB_TOKEN` would suppress CI on generated PRs and the downstream release workflow.
+
+Review the generated PR and wait for its checks before merging it.
+Merging publishes a `vX.Y.Z` tag and GitHub release; the `Handle Release` workflow then runs lint/tests and publishes the container from that tag with Docker's version tags and OCI metadata.
+Do not manually publish a Release Drafter draft; discard any stale draft left from the old workflow.
+To retry release automation, dispatch `Release Please` on `main`.
+To retry a container build, dispatch `Handle Release` using the released tag as the workflow ref.
