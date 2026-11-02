@@ -7,6 +7,8 @@ OrderedDict is used to associate the column header / position in the row with th
 """
 
 from collections import OrderedDict
+from os import getenv
+from re import fullmatch
 
 from prometheus_client import (
     Counter,
@@ -16,6 +18,7 @@ from prometheus_client import (
     Summary,
     disable_created_metrics,
 )
+from util.const import NetworkAccessState, SecurityState
 
 # By default, client will automatically create a "_created" meta metric for
 #   each metric defined below.
@@ -24,8 +27,9 @@ from prometheus_client import (
 disable_created_metrics()
 
 
-# TODO: this should be cli arg or env var
-METRICS_NS = "sb8200"
+METRICS_NS = getenv("METRICS_NAMESPACE", "sb8200")
+if not fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", METRICS_NS):
+    raise ValueError("METRICS_NAMESPACE must be a nonempty Prometheus metric prefix")
 META_NS = "meta"
 
 # In an attempt to make this script more resilient to changes in the HTML structure, we're going to
@@ -166,16 +170,15 @@ SU_METRICS["Configuration File"] = {
 e_startup_security_state = Enum(
     f"{METRICS_NS}_startup_security_state",
     "Indicates if DOCSIS layer 1/2 security in effect.",
-    # TODO: this should be an enum in a const.py
-    states=["enabled", "not_enabled"],
+    states=[state.value for state in SecurityState],
     labelnames=["comment"],
 )
 SU_METRICS["Security"] = {
     "metric": e_startup_security_state,
     "values": {
-        "Enabled": "enabled",
+        "Enabled": SecurityState.ENABLED.value,
     },
-    "default": "not_enabled",
+    "default": SecurityState.NOT_ENABLED.value,
 }
 
 
@@ -183,16 +186,15 @@ SU_METRICS["Security"] = {
 e_startup_docsis_net_access = Enum(
     f"{METRICS_NS}_startup_docsis_net_access_state",
     "Indicates if the modem is authorized to access the DOCSIS network.",
-    # TODO: this should be an enum in a const.py
-    states=["allowed", "not_allowed"],
+    states=[state.value for state in NetworkAccessState],
     labelnames=["comment"],
 )
 SU_METRICS["DOCSIS Network Access Enabled"] = {
     "metric": e_startup_docsis_net_access,
     "values": {
-        "Allowed": "allowed",
+        "Allowed": NetworkAccessState.ALLOWED.value,
     },
-    "default": "not_allowed",
+    "default": NetworkAccessState.NOT_ALLOWED.value,
 }
 
 

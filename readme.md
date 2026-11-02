@@ -9,7 +9,6 @@ It's simple and meant to be deployed in a k8s cluster but can be run locally; al
   - [Configuration](#configuration)
   - [Dashboard](#dashboard)
   - [Prior work](#prior-work)
-  - [TODOs](#todos)
   - [Deployment](#deployment)
   - [Development](#development)
   - [Releases](#releases)
@@ -23,6 +22,7 @@ It's simple and meant to be deployed in a k8s cluster but can be run locally; al
 | `MODEM_PASSWORD`                | None; required          | Modem password.                                                               |
 | `METRICS_PORT`                  | `8200`                  | Prometheus exporter listen port.                                              |
 | `METRICS_HOST`                  | `::`                    | Metrics bind address. Use `0.0.0.0` for IPv4-only or `::1` for IPv6 loopback. |
+| `METRICS_NAMESPACE`             | `sb8200`                | Prefix for modem metrics.                                                     |
 | `METRICS_POLL_INTERVAL_SECONDS` | `60`                    | Delay between regular modem polls and slow retries.                           |
 | `RE_LOGIN_INTERVAL_SECONDS`     | `5`                     | Delay between fast retries of the modem's transient login 401.                |
 | `LOGIN_401_MAX_RETRIES`         | `2`                     | Number of fast 401 retries before falling back to the regular poll interval.  |
@@ -33,6 +33,10 @@ The metrics listener defaults to the IPv6 wildcard address (`METRICS_HOST=::`).
 On systems configured to accept IPv4-mapped connections, this also serves IPv4; dual-stack behavior depends on the host's IPv6 socket settings.
 Set `METRICS_HOST=0.0.0.0` for an IPv4-only host.
 Use an unbracketed address for `METRICS_HOST` and brackets in URLs, for example `http://[::1]:8200/metrics`.
+
+`METRICS_NAMESPACE` is read at startup and must match `[a-zA-Z_][a-zA-Z0-9_]*`.
+Changing it also changes the state-label names of enum metrics; update dashboard queries and alerts that reference `sb8200_` accordingly.
+Exporter health metrics keep their `meta_` prefix, and Python/process metrics are unaffected.
 
 At present, `DOCSIS 3.1 Operations Support System Interface Specification (CM-SP-OSSIv3.1) - Section 7.2.1 (Cable Modem Management Requirements)` does not explicitly cover what a modem is supposed to do for IPv6 management IPs but if that ever does change something like `MODEM_BASE_URL=https://[2001:db8::1]` should work.
 
@@ -61,12 +65,6 @@ I don't want to run a headless browser in my k8s cluster and I want to use prome
 - [arris_exporter command - github.com/christianclinton/arris_exporter/cmd/arris_exporter - Go Packages](https://pkg.go.dev/github.com/christianclinton/arris_exporter@v0.0.0-20181110054855-7f6ab5b91ad2/cmd/arris_exporter)
 
 - [Monitoring Connect Box cable modems with Prometheus and Grafana | MB's Blog](https://mbugert.de/posts/2020-04-19-connectbox-prometheus/)
-
-## TODOs
-
-There's quite a few `#TODO: ...` in the code but they're mostly about polish and making things more robust.
-
-I've got limited time and this is working well for me in my environment so development - other than bug fixes - will be non-existent.
 
 ## Deployment
 
