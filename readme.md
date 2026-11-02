@@ -15,17 +15,25 @@ It's simple and meant to be deployed in a k8s cluster but can be run locally; al
 
 ## Configuration
 
-| Environment variable | Default | Purpose |
-| --- | --- | --- |
-| `MODEM_BASE_URL` | `https://192.168.100.1` | Modem management URL. |
-| `MODEM_USERNAME` | `admin` | Modem login name. |
-| `MODEM_PASSWORD` | None; required | Modem password. |
-| `METRICS_PORT` | `8200` | Prometheus exporter listen port. |
-| `METRICS_POLL_INTERVAL_SECONDS` | `60` | Delay between regular modem polls and slow retries. |
-| `RE_LOGIN_INTERVAL_SECONDS` | `5` | Delay between fast retries of the modem's transient login 401. |
-| `LOGIN_401_MAX_RETRIES` | `2` | Number of fast 401 retries before falling back to the regular poll interval. |
-| `MODEM_REQUEST_TIMEOUT_SECONDS` | `30` | Total timeout for each modem HTTP request. |
-| `LOG_LEVEL` | `INFO` | Python log level name. |
+| Environment variable            | Default                 | Purpose                                                                       |
+| ------------------------------- | ----------------------- | ----------------------------------------------------------------------------- |
+| `MODEM_BASE_URL`                | `https://192.168.100.1` | Modem management URL.                                                         |
+| `MODEM_USERNAME`                | `admin`                 | Modem login name.                                                             |
+| `MODEM_PASSWORD`                | None; required          | Modem password.                                                               |
+| `METRICS_PORT`                  | `8200`                  | Prometheus exporter listen port.                                              |
+| `METRICS_HOST`                  | `::`                    | Metrics bind address. Use `0.0.0.0` for IPv4-only or `::1` for IPv6 loopback. |
+| `METRICS_POLL_INTERVAL_SECONDS` | `60`                    | Delay between regular modem polls and slow retries.                           |
+| `RE_LOGIN_INTERVAL_SECONDS`     | `5`                     | Delay between fast retries of the modem's transient login 401.                |
+| `LOGIN_401_MAX_RETRIES`         | `2`                     | Number of fast 401 retries before falling back to the regular poll interval.  |
+| `MODEM_REQUEST_TIMEOUT_SECONDS` | `30`                    | Total timeout for each modem HTTP request.                                    |
+| `LOG_LEVEL`                     | `INFO`                  | Python log level name.                                                        |
+
+The metrics listener defaults to the IPv6 wildcard address (`METRICS_HOST=::`).
+On systems configured to accept IPv4-mapped connections, this also serves IPv4; dual-stack behavior depends on the host's IPv6 socket settings.
+Set `METRICS_HOST=0.0.0.0` for an IPv4-only host.
+Use an unbracketed address for `METRICS_HOST` and brackets in URLs, for example `http://[::1]:8200/metrics`.
+
+At present, `DOCSIS 3.1 Operations Support System Interface Specification (CM-SP-OSSIv3.1) - Section 7.2.1 (Cable Modem Management Requirements)` does not explicitly cover what a modem is supposed to do for IPv6 management IPs but if that ever does change something like `MODEM_BASE_URL=https://[2001:db8::1]` should work.
 
 ## Dashboard
 
@@ -67,5 +75,18 @@ Example manifest and deployment instructions are in [`infra/k8s`](infra/k8s/read
 
 ## Development
 
-Standard Python 3.14 / `uv` project.
+Standard Python 3.15 / `uv` project.
 To help with dashboard development, there is a [`docker-compose`](dashboards/docker-compose.yaml) file that will start a local instance of prometheus, grafana and the exporter.
+
+```shell
+mise install
+mise run test
+mise run lint
+mise run lint:markdown
+mise run scrape
+mise run docs:diagram
+```
+
+The diagram task runs the pinned KubeDiagrams image with Docker, falling back to Podman when Docker is unavailable; set `CONTAINER_RUNTIME` to override it.
+Python and Graphviz for diagram generation stay inside the container.
+The generated diagram is `infra/k8s/deployment.png`.

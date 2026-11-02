@@ -37,6 +37,7 @@ MODEM_PASSWORD = getenv("MODEM_PASSWORD", None)
 
 # default prometheus_client implementation does not support setting the path, only the port.
 METRICS_PORT = int(getenv("METRICS_PORT", "8200"))
+METRICS_HOST = getenv("METRICS_HOST", "::")
 METRICS_POLL_INTERVAL_SECONDS = int(getenv("METRICS_POLL_INTERVAL_SECONDS", "60"))
 RE_LOGIN_INTERVAL_SECONDS = int(getenv("RE_LOGIN_INTERVAL_SECONDS", "5"))
 # The modem intermittently 401s a login (see the ModemUnauthorizedError
@@ -178,7 +179,7 @@ async def main() -> None:
 
     # In testing, server responds to requests on / and /metrics so there's no real
     # need to allow customizing the path.
-    server, _ = start_http_server(port=METRICS_PORT)
+    server, _ = start_http_server(port=METRICS_PORT, addr=METRICS_HOST)
     log.info("Metrics server started", server=server.server_address)
 
     log.debug("Setting up connection to modem...")
