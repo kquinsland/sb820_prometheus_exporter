@@ -16,7 +16,7 @@ jobs:
   # We need to handle the manual workflow_dispatch case, though so it doesn't
   #    hurt to have the tests run first, again.
   lint_test_python:
-    uses: ./.github/workflows/ci_python_lint_and_test.yaml
+    uses: $/.github/workflows/ci_python_lint_and_test.yaml
     permissions:
       # Needed for the test job to run
       contents: read
@@ -37,7 +37,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
 
       - name: Set up Docker Buildx
         id: setup-buildx
@@ -75,8 +74,7 @@ jobs:
 
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
-            PYTHON_VERSION=3.14
-            BUILD_DATE=${{ steps.meta.outputs.build_date }}
-            VCS_REF=${{ steps.meta.outputs.vcs_ref }}
-            VERSION=${{ steps.meta.outputs.version }}
+            PYTHON_VERSION=3.15

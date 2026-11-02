@@ -3,7 +3,7 @@ name = "sb-exporter"
 version = "0.1.0"
 description = ""
 authors = [{ name = "Karl Quinsland" }]
-requires-python = "<4.0,>=3.14"
+requires-python = "<4.0,>=3.15"
 readme = "readme.md"
 dependencies = [
     "aiohttp>=3.14.5",
@@ -17,9 +17,10 @@ dev = [
     "black>=26.10.1",
     "isort>=9.0.2",
     "pylint>=4.1.3",
-    "pytest>=9.2.0",
+    { include-group = "test" },
 ]
 
+test = ["pytest>=9.2.0"]
 
 [tool.pytest.ini_options]
 # "app" so tests can import the app modules (sb8200, err, util) the same way
@@ -28,7 +29,14 @@ pythonpath = [".", "app"]
 addopts = ["--import-mode=importlib"]
 
 [tool.black]
-target-version = ["py314"]
+target-version = ["py315"]
+
+[tool.ruff]
+target-version = "py315"
+
+[tool.ruff.lint]
+# Keep the same baseline in CI, hooks, and developer environments.
+select = ["E4", "E7", "E9", "F"]
 
 # Tell iSort to play nice with Black
 [tool.isort]
