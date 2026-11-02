@@ -37,7 +37,7 @@ MODEM_PASSWORD = getenv("MODEM_PASSWORD", None)
 
 # default prometheus_client implementation does not support setting the path, only the port.
 METRICS_PORT = int(getenv("METRICS_PORT", "8200"))
-METRICS_HOST = getenv("METRICS_HOST", "0.0.0.0")
+METRICS_HOST = getenv("METRICS_HOST", "::")
 METRICS_POLL_INTERVAL_SECONDS = int(getenv("METRICS_POLL_INTERVAL_SECONDS", "60"))
 RE_LOGIN_INTERVAL_SECONDS = int(getenv("RE_LOGIN_INTERVAL_SECONDS", "5"))
 # The modem intermittently 401s a login (see the ModemUnauthorizedError
