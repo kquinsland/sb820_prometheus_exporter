@@ -1,0 +1,9 @@
+config:
+  default: true
+  MD013: false
+ignores:
+  - "**/[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]"
+  - ".venv/**"
+  - "node_modules/**"
+  - ".beads/**"
+  - ".agents/skills/**"

@@ -1,4 +1,5 @@
 ---
+exclude: '(?i)(^|/)agents\.md$|^\.beads/'
 repos:
   # Standard fille formatting / hygiene
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -6,6 +7,8 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
+        # Preserve captured modem responses verbatim.
+        exclude: ^tests/fixtures/.*\.html$
       - id: end-of-file-fixer
         # We want to ignore any file that ends in `.secret`
         exclude: |
@@ -35,28 +38,28 @@ repos:
           - --no-ensure-ascii
 
   # Fix any markdown issues
-  - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.49.0
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.24.0
     hooks:
-      - id: markdownlint
+      - id: markdownlint-cli2
 
   # Make sure python is well formed
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.21
+    rev: v0.17.3
     hooks:
       # Lint, fixing what can be automatically fixed
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
       # Format to ensure consistent style
       - id: ruff-format
 
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: v1.26.1
+    rev: v1.31.1
     hooks:
       - id: zizmor
 
   - repo: https://github.com/renovatebot/pre-commit-hooks
-    rev: 43.260.0
+    rev: 44.202.1
     hooks:
       - id: renovate-config-validator
         args: [--strict]

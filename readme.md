@@ -69,3 +69,16 @@ Example manifest and deployment instructions are in [`infra/k8s`](infra/k8s/read
 
 Standard Python 3.15 / `uv` project.
 To help with dashboard development, there is a [`docker-compose`](dashboards/docker-compose.yaml) file that will start a local instance of prometheus, grafana and the exporter.
+
+```shell
+mise install
+mise run test
+mise run lint
+mise run lint:markdown
+mise run scrape
+mise run docs:diagram
+```
+
+The diagram task runs the pinned KubeDiagrams image with Docker, falling back to Podman when Docker is unavailable; set `CONTAINER_RUNTIME` to override it.
+Python and Graphviz for diagram generation stay inside the container.
+The generated diagram is `infra/k8s/deployment.png`.
