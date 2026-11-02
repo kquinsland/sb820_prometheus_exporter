@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "sb8200_exporter",
+  "project_id": "c7ed99b1-20aa-4012-905e-a48553fb6bea"
+}
