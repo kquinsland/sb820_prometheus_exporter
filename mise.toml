@@ -43,7 +43,7 @@ markdownlint-cli2 = "0.24.0"
 prek = "0.5.9"
 pinact = "5.0.2"
 fnox = { version = "1.46.0", workflow = "release.yml" }
-"github:gastownhall/beads" = "1.3.2"
+"github:gastownhall/beads" = "v1.3.4"
 
 [tasks.test]
 description = "Run the Python test suite"
