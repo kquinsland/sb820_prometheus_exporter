@@ -40,7 +40,7 @@ jobs:
               id: check-lint-rules
               uses: astral-sh/ruff-action@278981a28ce3188b1e39527901f38254bf3aac89 # v4.1.0
               with:
-                  version: "0.17.3"
+                  version: "0.17.4"
                   args: check --output-format=github .
 
             - name: Check for formatting violations
@@ -49,7 +49,7 @@ jobs:
               # We explicitly do not fix here!
               # Show what would/should be changes and return non-zero if there are any.
               with:
-                  version: "0.17.3"
+                  version: "0.17.4"
                   args: format --check --diff .
 
     # Run tests alongside linting to reduce feedback time.
