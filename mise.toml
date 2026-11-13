@@ -24,7 +24,7 @@ uvx = true
 [tools]
 # Going to let UV manage this since pyproject.toml already drives this
 uv = "0.13.8"
-ruff = "0.17.3"
+ruff = "0.17.5"
 ty = "0.0.102"
 
 
