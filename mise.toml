@@ -35,9 +35,9 @@ kubeconform = "0.8.0"
 pluto = "5.24.5"
 
 # Docs
-# For NPM and markdown lint2
+# JavaScript tooling
 bun = "1.4.4"
-markdownlint-cli2 = "0.24.0"
+rumdl = "0.3.4"
 
 # General house keeping
 prek = "0.5.10"
@@ -54,8 +54,8 @@ description = "Run all pre-commit checks"
 run = "prek run --all-files"
 
 [tasks."lint:markdown"]
-description = "Lint Markdown with markdownlint-cli2"
-run = 'markdownlint-cli2 "**/*.md"'
+description = "Lint Markdown with rumdl"
+run = 'rumdl check .'
 
 [tasks.scrape]
 description = "Run the exporter with modem credentials from fnox"

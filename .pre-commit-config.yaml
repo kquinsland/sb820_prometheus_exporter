@@ -38,10 +38,13 @@ repos:
           - --no-ensure-ascii
 
   # Fix any markdown issues
-  - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.24.0
+  - repo: local
     hooks:
-      - id: markdownlint-cli2
+      - id: rumdl
+        name: rumdl (mise)
+        entry: mise exec rumdl -- rumdl check
+        language: system
+        types: [markdown]
 
   # Make sure python is well formed
   - repo: https://github.com/astral-sh/ruff-pre-commit

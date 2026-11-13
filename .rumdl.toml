@@ -1,0 +1,6 @@
+# Preserve the existing Markdown style policy.
+# Defer additional rumdl-only checks during the runner migration.
+[global]
+disable = ["MD013", "MD057", "MD062", "MD064", "MD065", "MD071", "MD076", "MD077"]
+respect-gitignore = true
+exclude = ["**/[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]", ".venv/**", "node_modules/**", ".beads/**", ".agents/skills/**"]

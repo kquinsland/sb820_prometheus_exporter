@@ -5,6 +5,9 @@
     }
   ],
   "settings": {
+      "editor.codeActionsOnSave": {
+          "source.fixAll.rumdl": "explicit"
+      },
     "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
     "python.analysis.typeCheckingMode": "basic",
     "python.analysis.autoImportCompletions": true,
@@ -39,7 +42,7 @@
       "ms-python.python",
       "streetsidesoftware.code-spell-checker",
       "editorconfig.editorconfig",
-      "davidanson.vscode-markdownlint",
+      "rvben.rumdl",
       "yzhang.markdown-all-in-one",
       "tamasfe.even-better-toml"
     ]
