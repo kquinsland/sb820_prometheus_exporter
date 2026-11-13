@@ -32,7 +32,7 @@ services:
       - prom-data:/prometheus/
 
   grafana:
-    image: grafana/grafana-enterprise:13.3.0
+    image: grafana/grafana-enterprise:13.3.1
     container_name: grafana
     environment:
       # Obviously, yes, this is a bad idea for anything that's not a toy / local tool
