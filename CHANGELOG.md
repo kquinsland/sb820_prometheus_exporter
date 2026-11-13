@@ -2,7 +2,6 @@
 
 ## [1.1.0](https://github.com/kquinsland/sb820_prometheus_exporter/compare/v1.0.2...v1.1.0) (2026-11-02)
 
-
 ### Features
 
 * configure metrics namespace and resolve exporter TODOs ([5439b1b](https://github.com/kquinsland/sb820_prometheus_exporter/commit/5439b1b95e4536c4da9b77d11d4406d91769612c))
