@@ -42,7 +42,7 @@ rumdl = "0.3.4"
 # General house keeping
 prek = "0.5.10"
 pinact = "5.0.2"
-fnox = { version = "1.46.0", workflow = "release.yml" }
+fnox = { version = "v1.48.0", workflow = "release.yml" }
 "github:gastownhall/beads" = "v1.3.4"
 
 [tasks.test]
