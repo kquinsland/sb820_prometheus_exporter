@@ -90,6 +90,41 @@ The diagram task runs the pinned KubeDiagrams image with Docker, falling back to
 Python and Graphviz for diagram generation stay inside the container.
 The generated diagram is `infra/k8s/deployment.png`.
 
+### Beads upgrades
+
+Beads manages durable project data separately from Git. Before upgrading, make a
+Dolt-native backup with the currently installed version; a JSONL export does not
+preserve database history:
+
+```shell
+bd backup init /absolute/path/outside-the-checkout/beads-backup
+bd backup sync
+bd backup status
+```
+
+Use an existing backup destination if one is already configured, and test recovery
+in a separate directory before relying on it. Verify that server-backed workspaces
+back up and sync the active database, not a stale local copy.
+
+For the 1.3.2 to 1.3.4 upgrade, read the
+[upstream upgrade notes and known issues](https://github.com/gastownhall/beads/blob/v1.3.4/CHANGELOG.md).
+There is no new schema migration or embedded Dolt engine change in this range.
+However, the following precautions still apply:
+
+- If the store crossed migration 0059 under Beads 1.3.0 or later, run
+  `bd recompute-blocked` once per workspace after backing up.
+- Do not run `bd compact` or `bd flatten` on a clone that adopted migration 0062
+  through pull/bootstrap or was cloned afterward. Version 1.3.4 still lacks the
+  [event-history restoration fix](https://github.com/gastownhall/beads/issues/7039);
+  those commands can remove history needed for recovery.
+- Review shared configuration endpoints before supplying credentials. Move keys
+  no longer accepted in `.beads/.env` to the shell environment or user config.
+  `mail.delegate` must also be configured per user.
+- Use full issue IDs with `bd delete`. `bd rules compact` now previews by default
+  and requires `--force` to apply; review its output before doing so.
+- For server-backed workspaces, consult the upstream workarounds before any remote
+  reset. Changing the binary version cannot restore lost database history.
+
 ## Releases
 
 [Release Please](https://github.com/googleapis/release-please-action) maintains a release PR after changes land on `main`.
