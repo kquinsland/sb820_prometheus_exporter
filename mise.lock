@@ -216,20 +216,20 @@ url_api = "https://api.github.com/repos/j178/prek/releases/assets/707839320"
 provenance = "github-attestations"
 
 [[tools.ruff]]
-version = "0.17.3"
+version = "0.17.6"
 backend = "aqua:astral-sh/ruff"
-specifiers = ["0.17.3"]
+specifiers = ["0.17.6"]
 
 [tools.ruff."platforms.linux-x64"]
-checksum = "sha256:2b0890f5a55900af741f133918c2656919bbf18c2ab7741b4ca8403a90e647a9"
-url = "https://github.com/astral-sh/ruff/releases/download/0.17.3/ruff-x86_64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/679956535"
+checksum = "sha256:94b33791f48cd54ab35ad673a443a5c001d3e6d87effeaba9899070b700d45f3"
+url = "https://github.com/astral-sh/ruff/releases/download/0.17.6/ruff-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/768307340"
 provenance = "github-attestations"
 
 [tools.ruff."platforms.macos-arm64"]
-checksum = "sha256:118f7121aa838785672bf612487f755a89108bb5f44e0f3df96c5967a72614f9"
-url = "https://github.com/astral-sh/ruff/releases/download/0.17.3/ruff-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/679956403"
+checksum = "sha256:72a886253072cd1bb6a5978a33a5a7add848ee315a8b0f1589f164a11c26328d"
+url = "https://github.com/astral-sh/ruff/releases/download/0.17.6/ruff-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/768306954"
 provenance = "github-attestations"
 
 [[tools.rumdl]]
